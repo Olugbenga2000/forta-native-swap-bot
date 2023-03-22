@@ -20,7 +20,7 @@ This bot detects attackers swapping ERC tokens to native tokens using decentrali
 
 Describe each of the type of alerts fired by this agent
 
-- NATIVE-SWAPS-BOT-1
+- UNUSUAL-NATIVE-SWAPS-BOT-1
   - Fired when an attacker swaps ERC tokens to native tokens using decentralized exchanges
   - Severity is always set to "Unknown" 
   - Type is always set to "Suspicious"
