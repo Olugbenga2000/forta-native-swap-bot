@@ -7,13 +7,15 @@ import {
   ethers
 } from "forta-agent";
 import BigNumber from "bignumber.js";
-import { getInternalTxsWithValueToMsgSender, pushOrCreateData } from "./utils";
+import { getInternalTxsWithValueToMsgSender, pushOrCreateData, toBn } from "./utils";
 import { AddressRecord } from "./swap";
+import {createNewFinding} from "./finding"
 
 
 
 const ERC20_TRANSFER_EVENT = "event Transfer(address indexed from, address indexed to, uint256 value)";
 const LOW_TRANSACTION_COUNT_THRESHOLD = 100;
+const MAX_ETH_SWAPPED = toBn(ethers.utils.parseEther("30"));
 let totalNativeSwaps = 0;
 
 export const provideBotHandler = (
@@ -45,7 +47,11 @@ export const provideBotHandler = (
       timestamp,
       erc20TransferEventsFromMsgSender
     );
-
+    const addressRecord = AddressRecord.get(msgSender);
+    // todo: add check for number of swaps
+    if (addressRecord?.totalEthReceived.gte(MAX_ETH_SWAPPED)){
+      findings.push(...createNewFinding(msgSender, addressRecord));
+    }      
 
     return findings;
   };

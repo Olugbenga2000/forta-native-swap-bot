@@ -1,4 +1,4 @@
-import BigNumber from "./agent";
+import BigNumber from "bignumber.js";
 
 interface Erc20TransferData {
     address: string,
@@ -8,12 +8,19 @@ interface Erc20TransferData {
 interface TxSwapData {
     blockNumber: number,
     blockTimestamp: number,
-    tokensSwapped: [Erc20TransferData]
+    tokensSwapped: Erc20TransferData[]
 }
 
 interface UserSwapData {
     totalEthReceived: BigNumber,
-    tokenSwapData: [TxSwapData]
+    tokenSwapData: TxSwapData[]
 }
 
-export const AddressRecord = new Map<string, UserSwapData>();
+const AddressRecord = new Map<string, UserSwapData>();
+
+export {
+    Erc20TransferData,
+    TxSwapData,
+    UserSwapData,
+    AddressRecord
+}
