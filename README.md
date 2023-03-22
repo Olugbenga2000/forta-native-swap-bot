@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Native Swaps Forta Detection Bot
 
 ## Description
@@ -21,7 +20,6 @@ This bot detects attackers swapping ERC tokens to native tokens using decentrali
 
 Describe each of the type of alerts fired by this agent
 
-<<<<<<< HEAD
 - NATIVE-SWAPS-CONTRACT-1
   - Fired when an attacker swaps ERC tokens to native tokens using decentralized exchanges
   - Severity is always set to "low" 
