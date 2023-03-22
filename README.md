@@ -20,10 +20,10 @@ This bot detects attackers swapping ERC tokens to native tokens using decentrali
 
 Describe each of the type of alerts fired by this agent
 
-- NATIVE-SWAPS-CONTRACT-1
+- NATIVE-SWAPS-BOT-1
   - Fired when an attacker swaps ERC tokens to native tokens using decentralized exchanges
-  - Severity is always set to "low" 
-  - Type is always set to "info"
+  - Severity is always set to "Unknown" 
+  - Type is always set to "Suspicious"
   - Metadata contains the following fields: 
     - attackerAddress: address of the attacker
     - amountOfSwappedToken: amount of ERC token swapped

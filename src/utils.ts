@@ -65,9 +65,19 @@ const createNewRecord = (msgSender: string, txEthReceived: BigNumber, txSwapData
     AddressRecord.set(msgSender, { totalEthReceived: txEthReceived, tokenSwapData: [txSwapData] })
 }
 
+const deleteRedundantData = (timestamp: number) => {
+    for (let key of AddressRecord.keys()){
+        let keyTokenSwapData = AddressRecord.get(key)?.tokenSwapData as TxSwapData[];
+    //check if the last swap recorded for each key is outdated and can be deleted
+    if (keyTokenSwapData[keyTokenSwapData.length - 1].blockTimestamp + MAX_TIMESTAMP < timestamp) 
+        AddressRecord.delete(key);
+}
+}
+
 
 export {
     getInternalTxsWithValueToMsgSender,
     pushOrCreateData,
-    toBn
+    toBn,
+    deleteRedundantData
 }
