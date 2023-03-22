@@ -15,14 +15,16 @@ import { createNewFinding } from "./finding"
 const MINIMUM_SWAP_COUNT = 2
 const ERC20_TRANSFER_EVENT = "event Transfer(address indexed from, address indexed to, uint256 value)";
 const LOW_TRANSACTION_COUNT_THRESHOLD = 100;
-const MAX_ETH_SWAPPED = toBn(ethers.utils.parseEther("30"));
+const MAX_ETH_THRESHOLD = toBn(ethers.utils.parseEther("30"));
 let totalNativeSwaps = 0;
+let unusualNativeSwaps = 0;
 
 export const provideBotHandler = (
   erc20TransferEvent: string,
   provider: ethers.providers.JsonRpcProvider,
   lowTxCount: number,
-  swapCountThreshold: number
+  swapCountThreshold: number,
+  maxEthThreshold: BigNumber
 ): HandleTransaction =>
   async (txEvent: TransactionEvent): Promise<Finding[]> => {
     const findings: Finding[] = [];
@@ -51,13 +53,15 @@ export const provideBotHandler = (
     const addressRecord = AddressRecord.get(msgSender);
     /**
      * create a finding if total eth received by the sender is greater than the threshold AND if
-     * the number of swaps is greater than the trnsfer count threshold (Attackers typically swap multiple tokens 
+     * the number of swaps is greater than the swap count threshold (Attackers typically swap multiple tokens 
      * when laundering stolen funds)
-      */ 
-    
-    if (addressRecord?.totalEthReceived.gte(MAX_ETH_SWAPPED) &&
+      */
+
+    if (addressRecord?.totalEthReceived.gte(maxEthThreshold) &&
       addressRecord.tokenSwapData.length >= swapCountThreshold) {
-      findings.push(createNewFinding(msgSender, addressRecord));
+      unusualNativeSwaps++;
+      let adScore = unusualNativeSwaps / totalNativeSwaps;
+      findings.push(createNewFinding(msgSender, addressRecord, adScore));
     }
     // remove redundant data from the AddressRecord Map every 10000 blocks
     if (blockNumber % 10000 === 0) deleteRedundantData(timestamp);
@@ -71,6 +75,7 @@ export default {
     ERC20_TRANSFER_EVENT,
     getEthersProvider(),
     LOW_TRANSACTION_COUNT_THRESHOLD,
-    MINIMUM_SWAP_COUNT)
-
+    MINIMUM_SWAP_COUNT,
+    MAX_ETH_THRESHOLD
+  )
 };
