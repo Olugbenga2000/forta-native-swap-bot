@@ -1,8 +1,10 @@
+<<<<<<< HEAD
 # Native Swaps Forta Detection Bot
 
 ## Description
 
 This bot detects attackers swapping ERC tokens to native tokens using decentralized exchanges
+
 
 ## Supported Chains
 
@@ -14,10 +16,12 @@ This bot detects attackers swapping ERC tokens to native tokens using decentrali
 - Fantom
 - BNBChain
 
+
 ## Alerts
 
 Describe each of the type of alerts fired by this agent
 
+<<<<<<< HEAD
 - NATIVE-SWAPS-CONTRACT-1
   - Fired when an attacker swaps ERC tokens to native tokens using decentralized exchanges
   - Severity is always set to "low" 
@@ -32,4 +36,3 @@ Describe each of the type of alerts fired by this agent
 ## Test Data
 
 The bot behaviour can be verified with the following transactions:
-- 
