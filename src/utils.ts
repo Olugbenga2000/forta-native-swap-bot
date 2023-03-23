@@ -1,9 +1,9 @@
 import dotenv from "dotenv";
 import axios from "axios";
 import BigNumber from "bignumber.js";
-import { LogDescription } from "forta-agent";
+import { LogDescription, ethers } from "forta-agent";
 import { AddressRecord, Erc20TransferData, TxSwapData, UserSwapData} from "./swap";
-import { BigNumberish, ethers } from "ethers";
+import { BigNumberish } from "ethers";
 BigNumber.set({ DECIMAL_PLACES: 18 });
 dotenv.config();
 const { KEY } = process.env;
