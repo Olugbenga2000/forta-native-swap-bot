@@ -18,9 +18,16 @@ interface UserSwapData {
 
 const AddressRecord = new Map<string, UserSwapData>();
 
+
+interface InternalTx {
+    value: BigNumber,
+    to: string
+}
+
 export {
     Erc20TransferData,
     TxSwapData,
     UserSwapData,
-    AddressRecord
+    AddressRecord,
+    InternalTx
 }

@@ -19,7 +19,7 @@ const createMetadata = (sender: string, addrRecord: UserSwapData, adScore: numbe
         swapStartBlockTimestamp: addrRecord.tokenSwapData[0].blockTimestamp.toString(),
         swapEndBlock: addrRecord.tokenSwapData[totalSwapCount - 1].blockNumber.toString(),
         swapEndBlockTimestamp: addrRecord.tokenSwapData[totalSwapCount - 1].blockTimestamp.toString(),
-        swapTokensAddressesAndAmount: `${swapTokensAddressesAndAmount}`,
+        swapTokensAddressesAndAmount: JSON.stringify(swapTokensAddressesAndAmount),
         anomalyScore: adScore.toString()
     }
 }
