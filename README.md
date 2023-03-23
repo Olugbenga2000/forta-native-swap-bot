@@ -34,3 +34,4 @@ Describe each of the type of alerts fired by this agent
 ## Test Data
 
 The bot behaviour can be verified with the following transactions:
+npm run sequence "15899279, 15899306, 15899329, 15899345, 15899373"

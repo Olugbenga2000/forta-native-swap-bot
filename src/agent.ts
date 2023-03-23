@@ -12,7 +12,7 @@ import { AddressRecord } from "./swap";
 import { createNewFinding } from "./finding"
 
 
-const MINIMUM_SWAP_COUNT = 1
+const MINIMUM_SWAP_COUNT = 2
 const ERC20_TRANSFER_EVENT = "event Transfer(address indexed from, address indexed to, uint256 value)";
 const LOW_TRANSACTION_COUNT_THRESHOLD = 100;
 const MAX_ETH_THRESHOLD = toBn(ethers.utils.parseEther("30"));
