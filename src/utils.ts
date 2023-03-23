@@ -2,25 +2,27 @@ import dotenv from "dotenv";
 import axios from "axios";
 import BigNumber from "bignumber.js";
 import { LogDescription } from "forta-agent";
-import { AddressRecord, Erc20TransferData, TxSwapData, UserSwapData } from "./swap";
-import { BigNumberish } from "ethers";
+import { AddressRecord, Erc20TransferData, TxSwapData, UserSwapData} from "./swap";
+import { BigNumberish, ethers } from "ethers";
 BigNumber.set({ DECIMAL_PLACES: 18 });
 dotenv.config();
 const { KEY } = process.env;
 const internalTxsURL = "https://api.etherscan.io/api?module=account&action=txlistinternal&txhash="
 const MAX_TIMESTAMP = 30 * 60; // maximum time between concurrent swaps. 
-const toBn = (ethersBn: BigNumberish) => new BigNumber(ethersBn.toString());
 
+const toBn = (ethersBn: BigNumberish) => new BigNumber(ethersBn.toString());
+const toCs = (address: string) => ethers.utils.getAddress(address);
 
 const getInternalTxsWithValueToMsgSender = async (hash: string, msgSender: string): Promise<any[]> => {
     const url = `${internalTxsURL}${hash}&apikey=${KEY}`;
     try {
-        const response = await axios.get(url);
-        if (response.status !== 1) {
-            console.log(`api error occured while getting internal transactions; ${response.data.message}`);
+        const {data} = await axios.get(url);
+        if (data.status !== '1') {
+            console.log(`etherscan api response: ${data.message} (internal)`);
             return [];
         }
-        return response.data.result.filter(((result: any) => result.to === msgSender && result.value > 0));
+        const {result} = data
+        return result.filter(((result: any) => toCs(result.to) === msgSender && result.value > 0));
     }
     catch (error) {
         console.log(`Error; ${error}`);
@@ -79,5 +81,6 @@ export {
     getInternalTxsWithValueToMsgSender,
     pushOrCreateData,
     toBn,
-    deleteRedundantData
+    deleteRedundantData,
+    toCs
 }
