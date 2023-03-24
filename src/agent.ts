@@ -16,8 +16,8 @@ const MINIMUM_SWAP_COUNT = 2
 const ERC20_TRANSFER_EVENT = "event Transfer(address indexed from, address indexed to, uint256 value)";
 const LOW_TRANSACTION_COUNT_THRESHOLD = 150;
 const MAX_ETH_THRESHOLD = toBn(ethers.utils.parseEther("30").toString());
-let totalNativeSwaps = 0;
-let unusualNativeSwaps = 0;
+export let totalNativeSwaps = 0;
+export let unusualNativeSwaps = 0;
 
 export const provideBotHandler = (
   erc20TransferEvent: string,
@@ -75,6 +75,6 @@ export default {
     getEthersProvider(),
     LOW_TRANSACTION_COUNT_THRESHOLD,
     MINIMUM_SWAP_COUNT,
-    MAX_ETH_THRESHOLD
+    MAX_ETH_THRESHOLD, 
   )
 };

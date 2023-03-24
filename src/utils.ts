@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import axios from "axios";
+import  axios from "axios";
 import BigNumber from "bignumber.js";
 import { LogDescription, ethers } from "forta-agent";
 import { AddressRecord, Erc20TransferData, TxSwapData, UserSwapData} from "./swap";
@@ -17,18 +17,19 @@ const getInternalTxsWithValueToMsgSender = async (hash: string, msgSender: strin
     const url = `${internalTxsURL}${hash}&apikey=${KEY}`;
     try {
         const {data} = await axios.get(url);
+        console.log(data)
         if (data.status !== '1') {
             console.log(`etherscan api response: ${data.message} (internal)`);
             return [];
         }
-        const {result} = data
+        const {result} = data;
         return result.filter(((result: any) => toCs(result.to) === msgSender && result.value > 0));
     }
     catch (error) {
         console.log(`Error; ${error}`);
         return []
-    }
-}
+    };
+};
 
 const pushOrCreateData = (
     txEthReceived: BigNumber,
