@@ -2,7 +2,7 @@ import { ethers, Finding, FindingSeverity, FindingType, Label, EntityType } from
 import { UserSwapData } from "./swap";
 import {Erc20TransferData} from "./swap"
 
-const createMetadata = (sender: string, addrRecord: UserSwapData, adScore: number): {
+export const createMetadata = (sender: string, addrRecord: UserSwapData, adScore: number): {
     [key: string]: string;
 } => {
     let totalSwapCount = addrRecord.tokenSwapData.length;
