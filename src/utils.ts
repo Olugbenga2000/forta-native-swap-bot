@@ -17,7 +17,6 @@ const getInternalTxsWithValueToMsgSender = async (hash: string, msgSender: strin
     const url = `${internalTxsURL}${hash}&apikey=${KEY}`;
     try {
         const {data} = await axios.get(url);
-        console.log(data)
         if (data.status !== '1') {
             console.log(`etherscan api response: ${data.message} (internal)`);
             return [];

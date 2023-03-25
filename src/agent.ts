@@ -15,20 +15,24 @@ import { createNewFinding } from "./finding"
 const MINIMUM_SWAP_COUNT = 2
 const ERC20_TRANSFER_EVENT = "event Transfer(address indexed from, address indexed to, uint256 value)";
 const LOW_TRANSACTION_COUNT_THRESHOLD = 150;
-const MAX_ETH_THRESHOLD = toBn(ethers.utils.parseEther("30").toString());
-export let totalNativeSwaps = 0;
-export let unusualNativeSwaps = 0;
+const MIN_ETH_THRESHOLD = toBn(ethers.utils.parseEther("30").toString());
+let totalNativeSwaps = 0;
+let unusualNativeSwaps = 0;
 
 export const provideBotHandler = (
   erc20TransferEvent: string,
   provider: ethers.providers.JsonRpcProvider,
   lowTxCount: number,
   swapCountThreshold: number,
-  maxEthThreshold: BigNumber
+  minEthThreshold: BigNumber
 ): HandleTransaction =>
   async (txEvent: TransactionEvent): Promise<Finding[]> => {
     const findings: Finding[] = [];
     const { from, hash, timestamp, blockNumber } = txEvent;
+
+    // remove redundant data from the AddressRecord Map every 10000 blocks
+    if (blockNumber % 10000 === 0) deleteRedundantData(timestamp);
+    
     const msgSender = toCs(from);
 
     // check the transaction logs for erc20 transfer events where token sender is msg.sender
@@ -57,14 +61,13 @@ export const provideBotHandler = (
      * when laundering stolen funds)
       */
 
-    if (addressRecord?.totalEthReceived.gte(maxEthThreshold) &&
+    if (addressRecord?.totalEthReceived.gte(minEthThreshold) &&
       addressRecord.tokenSwapData.length >= swapCountThreshold) {
       unusualNativeSwaps++;
       let adScore = unusualNativeSwaps / totalNativeSwaps;
       findings.push(createNewFinding(msgSender, addressRecord, adScore));
     }
-    // remove redundant data from the AddressRecord Map every 10000 blocks
-    if (blockNumber % 10000 === 0) deleteRedundantData(timestamp);
+
     return findings;
   };
 
@@ -75,6 +78,6 @@ export default {
     getEthersProvider(),
     LOW_TRANSACTION_COUNT_THRESHOLD,
     MINIMUM_SWAP_COUNT,
-    MAX_ETH_THRESHOLD, 
+    MIN_ETH_THRESHOLD, 
   )
 };
