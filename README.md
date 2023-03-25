@@ -45,7 +45,7 @@ using decentralized exchanges.
 ## Thresholds
   - `LOW_NONCE_THRESHOLD` : Refers to the maximum transaction count (nonce) for an address to be considered  new. Any address with nonce higher than this value won't be considered for a finding. The default value is 150 and can be adjusted by setting the `LOW_NONCE_THRESHOLD` in `src/constants` file, L3.
 
-  - `MAX_MINUTES_BETWEEN_SWAPS` : Refers to the maximum time interval(minutes) between swaps to be considered concurrent. If there is a new native swap by an address with a time difference(in minutes) greater than this value compared to the last native swap by the same address, the the previous swap(s) are deleted and only this new swap considered for a finding. The default value is 30 and can be adjusted by setting the `MAX_MINUTES_BETWEEN_SWAPS` in `src/constants` file, L5.
+  - `MAX_MINUTES_BETWEEN_SWAPS` : Refers to the maximum time interval(minutes) between swaps to be considered concurrent. If there is a new native swap by an address with a time difference(in minutes) greater than this value, compared to the last native swap by the same address, then the previous swap(s) are deleted and only this new swap is considered for a finding. The default value is 30 and can be adjusted by setting the `MAX_MINUTES_BETWEEN_SWAPS` in `src/constants` file, L5.
 
   - `MINIMUM_SWAP_COUNT` : This refers to the minimum number of concurrent native swaps an address must make
   for it to be considered for a finding. Any number of native swaps by an address below this value won't emit a finding even if all other conditions are fullfilled. The default value is 2 and can be adjusted by setting the `MINIMUM_SWAP_COUNT` in `src/constants` file, L1.
