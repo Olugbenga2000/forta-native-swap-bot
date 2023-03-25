@@ -1,0 +1,7 @@
+{
+    "minEthThreshold": "30",
+    "lowNonceThreshold": 150,
+    "swapCountThreshold": 2, 
+    "maxMinutesBetweenSwaps": 30
+    
+  }
