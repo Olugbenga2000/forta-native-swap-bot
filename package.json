@@ -37,8 +37,6 @@
     "bignumber.js": "^9.1.1",
     "ethers": "^6.0.8",
     "forta-agent": "^0.1.23"
-    
-    
   },
   "devDependencies": {
     "@types/jest": "^27.0.1",
