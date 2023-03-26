@@ -30,7 +30,7 @@ const getInternalTxsWithValueToMsgSender = async (hash: string, msgSender: strin
   }
 };
 
-const pushOrCreateData = (
+const createOrUpdateData = (
   txEthReceived: BigNumber,
   msgSender: string,
   blockNumber: number,
@@ -81,4 +81,4 @@ const deleteRedundantData = (timestamp: number) => {
   }
 };
 
-export { getInternalTxsWithValueToMsgSender, pushOrCreateData, toBn, deleteRedundantData, toCs };
+export { getInternalTxsWithValueToMsgSender, createOrUpdateData, toBn, deleteRedundantData, toCs };
