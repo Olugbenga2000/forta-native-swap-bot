@@ -7,13 +7,14 @@ import { provideBotHandler, totalNativeSwaps } from "./agent";
 import { toBn } from "./utils";
 import { createMetadata } from "./finding";
 import { UserSwapData, AddressRecord } from "./swap";
+import { ERC20_TRANSFER_EVENT as MOCK_ERC20_TRANSFER_EVENT } from "./constants"
 BigNumber.set({ DECIMAL_PLACES: 18 });
 
 const lowerC = (address: string) => address.toLowerCase();
 const parseEther = (ether: string) => ethers.utils.parseEther(ether).toString();
 
+
 const MOCK_MINIMUM_SWAP_COUNT = 3;
-const MOCK_ERC20_TRANSFER_EVENT = "event Transfer(address indexed from, address indexed to, uint256 value)";
 const MOCK_ERC20_APPROVAL_EVENT = "event Approval(address indexed owner, address indexed spender, uint256 value)";
 const MOCK_LOW_TRANSACTION_COUNT_THRESHOLD = 150;
 const MOCK_MIN_ETH_THRESHOLD = toBn(parseEther("30"));
@@ -27,7 +28,7 @@ const ADDRESSES = {
 }
 
 const mockCreateNewFinding = (sender: string, addrRecord: UserSwapData): Finding => {
-    mockUnusualNativeSwaps ++;
+    mockUnusualNativeSwaps++;
     const adScore = mockUnusualNativeSwaps / totalNativeSwaps;
     return Finding.fromObject({
         name: "Unusual Native Swaps Forta Detection Bot",
@@ -62,7 +63,7 @@ const createTransferEvent = (
 jest.mock("axios");
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
-describe("unusual native swaps bot tests", () => {
+describe("Unusual Native Swaps Bot Test Suite", () => {
     const mockProvider = {
         getTransactionCount: jest.fn()
     }
@@ -192,8 +193,8 @@ describe("unusual native swaps bot tests", () => {
             };
             mockedAxios.get.mockResolvedValueOnce(response1).mockResolvedValueOnce(response2);
             mockProvider.getTransactionCount.mockResolvedValueOnce(75).mockResolvedValueOnce(101);
-           
-           
+
+
             expect(await handleTransaction(txEvent1)).toStrictEqual([]);
             expect(await handleTransaction(txEvent2)).toStrictEqual([]);
             expect(axios.get).toHaveBeenCalledTimes(2);
@@ -235,7 +236,7 @@ describe("unusual native swaps bot tests", () => {
                     ]
                 }
             };
-            
+
             const txEvent3 = new TestTransactionEvent()
                 .setFrom(lowerC(ADDRESSES.attacker))
                 .setBlock(19995480)
@@ -246,14 +247,14 @@ describe("unusual native swaps bot tests", () => {
                 data: {
                     status: '1', message: 'OK', result: [
                         { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "959356" },
-                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("25")}
+                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("25") }
                     ]
                 }
             };
             mockedAxios.get.mockResolvedValueOnce(response1).mockResolvedValueOnce(response2).mockResolvedValueOnce(response3);
             mockProvider.getTransactionCount.mockResolvedValueOnce(75).mockResolvedValueOnce(101).mockResolvedValueOnce(145);
-           
-           
+
+
             expect(await handleTransaction(txEvent1)).toStrictEqual([]);
             expect(await handleTransaction(txEvent2)).toStrictEqual([]);
             expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("32")));
@@ -299,7 +300,7 @@ describe("unusual native swaps bot tests", () => {
                     ]
                 }
             };
-            
+
             const txEvent3 = new TestTransactionEvent()
                 .setFrom(lowerC(ADDRESSES.attacker))
                 .setBlock(19995490)
@@ -311,14 +312,14 @@ describe("unusual native swaps bot tests", () => {
                 data: {
                     status: '1', message: 'OK', result: [
                         { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "959356" },
-                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("5")}
+                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("5") }
                     ]
                 }
             };
             mockedAxios.get.mockResolvedValueOnce(response1).mockResolvedValueOnce(response2).mockResolvedValueOnce(response3);
             mockProvider.getTransactionCount.mockResolvedValueOnce(75).mockResolvedValueOnce(101).mockResolvedValueOnce(145);
-           
-           
+
+
             expect(await handleTransaction(txEvent1)).toStrictEqual([]);
             expect(await handleTransaction(txEvent2)).toStrictEqual([]);
             expect(await handleTransaction(txEvent3)).toStrictEqual([]);
@@ -361,7 +362,7 @@ describe("unusual native swaps bot tests", () => {
                     ]
                 }
             };
-            
+
             const txEvent3 = new TestTransactionEvent()
                 .setFrom(lowerC(ADDRESSES.contractAddr))
                 .setBlock(19989950)
@@ -371,7 +372,7 @@ describe("unusual native swaps bot tests", () => {
             const response3 = {
                 data: {
                     status: '1', message: 'OK', result: [
-                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.contractAddr), value: parseEther("3")}
+                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.contractAddr), value: parseEther("3") }
                     ]
                 }
             };
@@ -384,16 +385,16 @@ describe("unusual native swaps bot tests", () => {
             const response4 = {
                 data: {
                     status: '1', message: 'OK', result: [
-                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.address1), value: parseEther("10.8")}
+                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.address1), value: parseEther("10.8") }
                     ]
                 }
             };
             mockedAxios.get.mockResolvedValueOnce(response1).mockResolvedValueOnce(response2)
-            .mockResolvedValueOnce(response3).mockResolvedValueOnce(response4);
+                .mockResolvedValueOnce(response3).mockResolvedValueOnce(response4);
             mockProvider.getTransactionCount.mockResolvedValueOnce(75).mockResolvedValueOnce(101)
-            .mockResolvedValueOnce(125).mockResolvedValueOnce(148);
-           
-           
+                .mockResolvedValueOnce(125).mockResolvedValueOnce(148);
+
+
             expect(await handleTransaction(txEvent1)).toStrictEqual([]);
             expect(await handleTransaction(txEvent2)).toStrictEqual([]);
             expect(await handleTransaction(txEvent3)).toStrictEqual([]);
@@ -418,13 +419,13 @@ describe("unusual native swaps bot tests", () => {
             expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.address2, 19989870);
             expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.contractAddr, 19989950);
             expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.address1, 19990000);
-            
+
         });
     });
 
 
     describe("tests for cases that returns findings ", () => {
-        it("should return finding when the eth and swaps thresholds are reached", async() => {
+        it("should return finding when the eth and swaps thresholds are reached", async () => {
             const txEvent1 = new TestTransactionEvent()
                 .setFrom(lowerC(ADDRESSES.attacker))
                 .setBlock(19995400)
@@ -454,7 +455,7 @@ describe("unusual native swaps bot tests", () => {
                     ]
                 }
             };
-            
+
             const txEvent3 = new TestTransactionEvent()
                 .setFrom(lowerC(ADDRESSES.attacker))
                 .setBlock(19995490)
@@ -465,7 +466,7 @@ describe("unusual native swaps bot tests", () => {
                 data: {
                     status: '1', message: 'OK', result: [
                         { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "959356" },
-                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("5")}
+                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("5") }
                     ]
                 }
             };
@@ -484,9 +485,9 @@ describe("unusual native swaps bot tests", () => {
             expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995490);
             expect(addrRecord.totalEthReceived).toStrictEqual(toBn(parseEther("30")));
             expect(addrRecord.tokenSwapData.length).toStrictEqual(3);
-            
+
         });
-        it("should return multiple findings when the eth and swaps thresholds are reached for multiple concurrent swaps", async() => {
+        it("should return multiple findings when the eth and swaps thresholds are reached for multiple concurrent swaps", async () => {
             const txEvent1 = new TestTransactionEvent()
                 .setFrom(lowerC(ADDRESSES.attacker))
                 .setBlock(19995400)
@@ -516,7 +517,7 @@ describe("unusual native swaps bot tests", () => {
                     ]
                 }
             };
-            
+
             const txEvent3 = new TestTransactionEvent()
                 .setFrom(lowerC(ADDRESSES.attacker))
                 .setBlock(19995490)
@@ -527,7 +528,7 @@ describe("unusual native swaps bot tests", () => {
                 data: {
                     status: '1', message: 'OK', result: [
                         { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "959356" },
-                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("5")}
+                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("5") }
                     ]
                 }
             };
@@ -542,14 +543,14 @@ describe("unusual native swaps bot tests", () => {
                 data: {
                     status: '1', message: 'OK', result: [
                         { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "943356" },
-                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("8")}
+                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("8") }
                     ]
                 }
             };
             mockedAxios.get.mockResolvedValueOnce(response1).mockResolvedValueOnce(response2)
-            .mockResolvedValueOnce(response3).mockResolvedValueOnce(response4);
+                .mockResolvedValueOnce(response3).mockResolvedValueOnce(response4);
             mockProvider.getTransactionCount.mockResolvedValueOnce(20).mockResolvedValueOnce(45)
-            .mockResolvedValueOnce(67).mockResolvedValueOnce(120);
+                .mockResolvedValueOnce(67).mockResolvedValueOnce(120);
 
             expect(await handleTransaction(txEvent1)).toStrictEqual([]);
             expect(await handleTransaction(txEvent2)).toStrictEqual([]);
@@ -567,7 +568,7 @@ describe("unusual native swaps bot tests", () => {
             expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995590);
             expect(addrRecord.totalEthReceived).toStrictEqual(toBn(parseEther("48")));
             expect(addrRecord.tokenSwapData.length).toStrictEqual(4);
-            
+
         });
     });
 
