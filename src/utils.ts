@@ -4,11 +4,12 @@ import BigNumber from "bignumber.js";
 import { LogDescription, ethers } from "forta-agent";
 import { AddressRecord, Erc20TransferData, TxSwapData, UserSwapData} from "./swap";
 import { BigNumberish } from "ethers";
+import { MAX_MINUTES_BETWEEN_SWAPS } from "./constants";
 BigNumber.set({ DECIMAL_PLACES: 18 });
 dotenv.config();
 const { KEY } = process.env;
 const internalTxsURL = "https://api.etherscan.io/api?module=account&action=txlistinternal&txhash="
-const MAX_TIMESTAMP = 30 * 60; // maximum time between concurrent swaps. 
+const MAX_TIMESTAMP = MAX_MINUTES_BETWEEN_SWAPS * 60; // maximum time between concurrent swaps. 
 
 const toBn = (ethersBn: BigNumberish) => new BigNumber(ethersBn.toString());
 const toCs = (address: string) => ethers.utils.getAddress(address);

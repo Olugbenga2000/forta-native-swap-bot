@@ -3,7 +3,7 @@ import { createChecksumAddress } from "forta-agent-tools/lib/utils";
 import { TestTransactionEvent } from "forta-agent-tools/lib/test";
 import BigNumber from "bignumber.js";
 import axios from "axios";
-import { provideBotHandler } from "./agent";
+import { provideBotHandler, totalNativeSwaps } from "./agent";
 import { toBn } from "./utils";
 import { createMetadata } from "./finding";
 import { UserSwapData, AddressRecord } from "./swap";
@@ -17,7 +17,6 @@ const MOCK_ERC20_TRANSFER_EVENT = "event Transfer(address indexed from, address 
 const MOCK_ERC20_APPROVAL_EVENT = "event Approval(address indexed owner, address indexed spender, uint256 value)";
 const MOCK_LOW_TRANSACTION_COUNT_THRESHOLD = 150;
 const MOCK_MIN_ETH_THRESHOLD = toBn(parseEther("30"));
-let mockTotalNativeSwaps = 0;
 let mockUnusualNativeSwaps = 0;
 
 const ADDRESSES = {
@@ -27,8 +26,10 @@ const ADDRESSES = {
     contractAddr: createChecksumAddress("0x3852A"),
 }
 
-const mockCreateNewFinding = (sender: string, addrRecord: UserSwapData, adScore: number): Finding =>
-    Finding.fromObject({
+const mockCreateNewFinding = (sender: string, addrRecord: UserSwapData): Finding => {
+    mockUnusualNativeSwaps ++;
+    const adScore = mockUnusualNativeSwaps / totalNativeSwaps;
+    return Finding.fromObject({
         name: "Unusual Native Swaps Forta Detection Bot",
         description: `Unusual native swap behavior by ${sender} has been detected`,
         alertId: "UNUSUAL-NATIVE-SWAPS",
@@ -45,6 +46,7 @@ const mockCreateNewFinding = (sender: string, addrRecord: UserSwapData, adScore:
                 remove: false
             })]
     });
+}
 
 const MOCK_ERC20_IFACE = new ethers.utils.Interface([MOCK_ERC20_TRANSFER_EVENT, MOCK_ERC20_APPROVAL_EVENT]);
 const createTransferEvent = (
@@ -417,8 +419,156 @@ describe("unusual native swaps bot tests", () => {
             expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.contractAddr, 19989950);
             expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.address1, 19990000);
             
-
         });
-    })
+    });
 
-})
+
+    describe("tests for cases that returns findings ", () => {
+        it("should return finding when the eth and swaps thresholds are reached", async() => {
+            const txEvent1 = new TestTransactionEvent()
+                .setFrom(lowerC(ADDRESSES.attacker))
+                .setBlock(19995400)
+                .setTimestamp(19180075)
+                .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+
+            const response1 = {
+                data: {
+                    status: '1', message: 'OK', result: [
+                        { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
+                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("15") }
+                    ]
+                }
+            };
+
+            const txEvent2 = new TestTransactionEvent()
+                .setFrom(lowerC(ADDRESSES.attacker))
+                .setBlock(19995450)
+                .setTimestamp(19181800)
+                .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
+
+            const response2 = {
+                data: {
+                    status: '1', message: 'OK', result: [
+                        { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "957456" },
+                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("10") }
+                    ]
+                }
+            };
+            
+            const txEvent3 = new TestTransactionEvent()
+                .setFrom(lowerC(ADDRESSES.attacker))
+                .setBlock(19995490)
+                .setTimestamp(19182700)
+                .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
+
+            const response3 = {
+                data: {
+                    status: '1', message: 'OK', result: [
+                        { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "959356" },
+                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("5")}
+                    ]
+                }
+            };
+            mockedAxios.get.mockResolvedValueOnce(response1).mockResolvedValueOnce(response2).mockResolvedValueOnce(response3);
+            mockProvider.getTransactionCount.mockResolvedValueOnce(20).mockResolvedValueOnce(45).mockResolvedValueOnce(67);
+
+            expect(await handleTransaction(txEvent1)).toStrictEqual([]);
+            expect(await handleTransaction(txEvent2)).toStrictEqual([]);
+            const finding = await handleTransaction(txEvent3);
+            const addrRecord = AddressRecord.get(ADDRESSES.attacker) as UserSwapData;
+            expect(finding).toStrictEqual([mockCreateNewFinding(ADDRESSES.attacker, addrRecord)]);
+            expect(axios.get).toHaveBeenCalledTimes(3);
+            expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(3);
+            expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
+            expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
+            expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995490);
+            expect(addrRecord.totalEthReceived).toStrictEqual(toBn(parseEther("30")));
+            expect(addrRecord.tokenSwapData.length).toStrictEqual(3);
+            
+        });
+        it("should return multiple findings when the eth and swaps thresholds are reached for multiple concurrent swaps", async() => {
+            const txEvent1 = new TestTransactionEvent()
+                .setFrom(lowerC(ADDRESSES.attacker))
+                .setBlock(19995400)
+                .setTimestamp(19180075)
+                .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+
+            const response1 = {
+                data: {
+                    status: '1', message: 'OK', result: [
+                        { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
+                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("15") }
+                    ]
+                }
+            };
+
+            const txEvent2 = new TestTransactionEvent()
+                .setFrom(lowerC(ADDRESSES.attacker))
+                .setBlock(19995450)
+                .setTimestamp(19181800)
+                .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
+
+            const response2 = {
+                data: {
+                    status: '1', message: 'OK', result: [
+                        { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "957456" },
+                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("20") }
+                    ]
+                }
+            };
+            
+            const txEvent3 = new TestTransactionEvent()
+                .setFrom(lowerC(ADDRESSES.attacker))
+                .setBlock(19995490)
+                .setTimestamp(19182700)
+                .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
+
+            const response3 = {
+                data: {
+                    status: '1', message: 'OK', result: [
+                        { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "959356" },
+                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("5")}
+                    ]
+                }
+            };
+
+            const txEvent4 = new TestTransactionEvent()
+                .setFrom(lowerC(ADDRESSES.attacker))
+                .setBlock(19995590)
+                .setTimestamp(19183100)
+                .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "9878764"));
+
+            const response4 = {
+                data: {
+                    status: '1', message: 'OK', result: [
+                        { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "943356" },
+                        { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("8")}
+                    ]
+                }
+            };
+            mockedAxios.get.mockResolvedValueOnce(response1).mockResolvedValueOnce(response2)
+            .mockResolvedValueOnce(response3).mockResolvedValueOnce(response4);
+            mockProvider.getTransactionCount.mockResolvedValueOnce(20).mockResolvedValueOnce(45)
+            .mockResolvedValueOnce(67).mockResolvedValueOnce(120);
+
+            expect(await handleTransaction(txEvent1)).toStrictEqual([]);
+            expect(await handleTransaction(txEvent2)).toStrictEqual([]);
+            let finding = await handleTransaction(txEvent3);
+            let addrRecord = AddressRecord.get(ADDRESSES.attacker) as UserSwapData;
+            expect(finding).toStrictEqual([mockCreateNewFinding(ADDRESSES.attacker, addrRecord)]);
+            finding = await handleTransaction(txEvent4);
+            addrRecord = AddressRecord.get(ADDRESSES.attacker) as UserSwapData;
+            expect(finding).toStrictEqual([mockCreateNewFinding(ADDRESSES.attacker, addrRecord)]);
+            expect(axios.get).toHaveBeenCalledTimes(4);
+            expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(4);
+            expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
+            expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
+            expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995490);
+            expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995590);
+            expect(addrRecord.totalEthReceived).toStrictEqual(toBn(parseEther("48")));
+            expect(addrRecord.tokenSwapData.length).toStrictEqual(4);
+            
+        });
+    });
+
+});

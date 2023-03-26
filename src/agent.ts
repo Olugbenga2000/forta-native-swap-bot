@@ -10,13 +10,14 @@ import BigNumber from "bignumber.js";
 import { getInternalTxsWithValueToMsgSender, pushOrCreateData, toBn, toCs, deleteRedundantData } from "./utils";
 import { AddressRecord } from "./swap";
 import { createNewFinding } from "./finding"
+import {
+  MINIMUM_SWAP_COUNT,
+  ERC20_TRANSFER_EVENT,
+  LOW_NONCE_THRESHOLD,
+  MIN_ETH_THRESHOLD
+} from "./constants";
 
-
-const MINIMUM_SWAP_COUNT = 2
-const ERC20_TRANSFER_EVENT = "event Transfer(address indexed from, address indexed to, uint256 value)";
-const LOW_TRANSACTION_COUNT_THRESHOLD = 150;
-const MIN_ETH_THRESHOLD = toBn(ethers.utils.parseEther("30").toString());
-let totalNativeSwaps = 0;
+export let totalNativeSwaps = 0;
 let unusualNativeSwaps = 0;
 
 export const provideBotHandler = (
@@ -32,7 +33,7 @@ export const provideBotHandler = (
 
     // remove redundant data from the AddressRecord Map every 10000 blocks
     if (blockNumber % 10000 === 0) deleteRedundantData(timestamp);
-    
+
     const msgSender = toCs(from);
 
     // check the transaction logs for erc20 transfer events where token sender is msg.sender
@@ -76,8 +77,8 @@ export default {
   handleTransaction: provideBotHandler(
     ERC20_TRANSFER_EVENT,
     getEthersProvider(),
-    LOW_TRANSACTION_COUNT_THRESHOLD,
+    LOW_NONCE_THRESHOLD,
     MINIMUM_SWAP_COUNT,
-    MIN_ETH_THRESHOLD, 
+    toBn(ethers.utils.parseEther(MIN_ETH_THRESHOLD.toString()).toString()), 
   )
 };

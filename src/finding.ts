@@ -21,8 +21,8 @@ export const createMetadata = (sender: string, addrRecord: UserSwapData, adScore
         swapEndBlockTimestamp: addrRecord.tokenSwapData[totalSwapCount - 1].blockTimestamp.toString(),
         swapTokensAddressesAndAmounts: JSON.stringify(swapTokensAddressesAndAmount),
         anomalyScore: adScore.toString()
-    }
-}
+    };
+};
 
 export const createNewFinding = (sender: string, addrRecord: UserSwapData, adScore: number): Finding =>
     Finding.fromObject({
@@ -41,6 +41,6 @@ export const createNewFinding = (sender: string, addrRecord: UserSwapData, adSco
               confidence: 0.3,
               remove: false
             })]
-    })
+    });
 
 
