@@ -1,6 +1,6 @@
 import { Finding, Initialize, HandleTransaction, TransactionEvent, getEthersProvider, ethers } from "forta-agent";
 import BigNumber from "bignumber.js";
-import { getInternalTxsWithValueToMsgSender, pushOrCreateData, toBn, toCs, deleteRedundantData } from "./utils";
+import { getInternalTxsWithValueToMsgSender, createOrUpdateData, toBn, toCs, deleteRedundantData } from "./utils";
 import { AddressRecord } from "./swap";
 import { createNewFinding } from "./finding";
 import { MINIMUM_SWAP_COUNT, ERC20_TRANSFER_EVENT, LOW_NONCE_THRESHOLD, MIN_ETH_THRESHOLD } from "./constants";
@@ -36,7 +36,7 @@ export const provideBotHandler = (
   // Check if msg.sender's address is new
   if (nonce > lowTxCount) return findings;
   const totalEthReceived: BigNumber = internalTxs.reduce((acc: BigNumber, tx) => acc.plus(tx.value), toBn(0));
-  pushOrCreateData(totalEthReceived, msgSender, blockNumber, timestamp, erc20TransferEventsFromMsgSender);
+  createOrUpdateData(totalEthReceived, msgSender, blockNumber, timestamp, erc20TransferEventsFromMsgSender);
   const addressRecord = AddressRecord.get(msgSender);
   /**
    * create a finding if total eth received by the sender is greater than the threshold AND if
