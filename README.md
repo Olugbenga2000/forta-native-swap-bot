@@ -9,7 +9,7 @@ using decentralized exchanges.
 The bot uses Etherscan API to fetch internal transactions so an etherscan api key is 
 needed to run the bot successfully. Create a `.env` file in the project directory and 
 add the api key.
- `KEY = "YOUR-API-KEY"`
+ - `KEY = "YOUR-API-KEY"`
 
 
 ## Supported Chains
