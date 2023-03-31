@@ -36,7 +36,7 @@ export const provideBotHandler = (
   // Check if msg.sender's address is new
   if (nonce > lowTxCount) return findings;
   const totalEthReceived: BigNumber = internalTxs.reduce((acc: BigNumber, tx) => acc.plus(tx.value), toBn(0));
-  createOrUpdateData(totalEthReceived, msgSender, blockNumber, timestamp, erc20TransferEventsFromMsgSender);
+  createOrUpdateData(totalEthReceived, hash, msgSender, blockNumber, timestamp, erc20TransferEventsFromMsgSender);
   const addressRecord = AddressRecord.get(msgSender);
   /**
    * create a finding if total eth received by the sender is greater than the threshold AND if

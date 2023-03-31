@@ -32,6 +32,7 @@ const getInternalTxsWithValueToMsgSender = async (hash: string, msgSender: strin
 
 const createOrUpdateData = (
   txEthReceived: BigNumber,
+  txHash: string,
   msgSender: string,
   blockNumber: number,
   blockTimestamp: number,
@@ -41,6 +42,7 @@ const createOrUpdateData = (
     (log): Erc20TransferData => ({
       address: log.address,
       amount: toBn(log.args.value),
+      txHash
     })
   );
   const txSwapData: TxSwapData = {
