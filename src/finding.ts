@@ -36,7 +36,7 @@ export const createNewFinding = (sender: string, addrRecord: UserSwapData, adSco
     name: "Unusual Native Swaps Forta Detection Bot",
     description: `Unusual native swap behavior by ${sender} has been detected`,
     alertId: "UNUSUAL-NATIVE-SWAPS",
-    severity: FindingSeverity.Unknown,
+    severity: FindingSeverity.Medium,
     type: FindingType.Suspicious,
     protocol: "Forta",
     metadata: createMetadata(sender, addrRecord, adScore),
