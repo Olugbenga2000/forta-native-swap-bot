@@ -26,7 +26,7 @@ export const provideBotHandler = (
   // check the transaction logs for erc20 transfer events where token sender is msg.sender
   const erc20TransferEventsFromMsgSender = txEvent
     .filterLog(erc20TransferEvent)
-    .filter(log => log.args.from === msgSender);
+    .filter(log => log.args.from === msgSender && log.args.to !== ethers.constants.AddressZero);
   if (!erc20TransferEventsFromMsgSender.length) return findings;
   // we get the transaction traces to check if the sender received eth
   const internalTxs = await getInternalTxsWithValueToMsgSender(hash, msgSender);
