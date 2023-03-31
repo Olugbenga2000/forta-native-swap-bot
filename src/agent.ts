@@ -1,6 +1,6 @@
 import { Finding, Initialize, HandleTransaction, TransactionEvent, getEthersProvider, ethers } from "forta-agent";
 import BigNumber from "bignumber.js";
-import { getInternalTxsWithValueToMsgSender, createOrUpdateData, toBn, toCs, deleteRedundantData } from "./utils";
+import { createOrUpdateData, toBn, toCs, deleteRedundantData } from "./utils";
 import { AddressRecord } from "./swap";
 import { createNewFinding } from "./finding";
 import { MINIMUM_SWAP_COUNT, ERC20_TRANSFER_EVENT, LOW_NONCE_THRESHOLD, MIN_ETH_THRESHOLD } from "./constants";
@@ -28,15 +28,16 @@ export const provideBotHandler = (
     .filterLog(erc20TransferEvent)
     .filter(log => log.args.from === msgSender && log.args.to !== ethers.constants.AddressZero);
   if (!erc20TransferEventsFromMsgSender.length) return findings;
-  // we get the transaction traces to check if the sender received eth
-  const internalTxs = await getInternalTxsWithValueToMsgSender(hash, msgSender);
-  if (!internalTxs.length) return findings;
+  // Compare account balance at previous block to balance at current block to determine if a swap occured
+  const previousBalance  = toBn((await provider.getBalance(msgSender, blockNumber - 1)).toString());
+  const currentBalance  = toBn((await provider.getBalance(msgSender, blockNumber)).toString());
+  const ethBalanceDiff = currentBalance.minus(previousBalance);
+  if (ethBalanceDiff.lte(0)) return findings;
   totalNativeSwaps++;
   const nonce = await provider.getTransactionCount(msgSender, blockNumber);
   // Check if msg.sender's address is new
   if (nonce > lowTxCount) return findings;
-  const totalEthReceived: BigNumber = internalTxs.reduce((acc: BigNumber, tx) => acc.plus(tx.value), toBn(0));
-  createOrUpdateData(totalEthReceived, hash, msgSender, blockNumber, timestamp, erc20TransferEventsFromMsgSender);
+  createOrUpdateData(ethBalanceDiff, hash, msgSender, blockNumber, timestamp, erc20TransferEventsFromMsgSender);
   const addressRecord = AddressRecord.get(msgSender);
   /**
    * create a finding if total eth received by the sender is greater than the threshold AND if
