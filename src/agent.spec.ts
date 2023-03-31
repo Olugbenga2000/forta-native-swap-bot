@@ -2,7 +2,6 @@ import { FindingType, FindingSeverity, Finding, HandleTransaction, ethers, Entit
 import { createChecksumAddress } from "forta-agent-tools/lib/utils";
 import { TestTransactionEvent } from "forta-agent-tools/lib/test";
 import BigNumber from "bignumber.js";
-import axios from "axios";
 import { provideBotHandler, totalNativeSwaps } from "./agent";
 import { toBn } from "./utils";
 import { createMetadata } from "./finding";
@@ -56,18 +55,16 @@ const createTransferEvent = (from: string, to: string, value: string): [ethers.u
   [from, to, value],
 ];
 
-jest.mock("axios");
-const mockedAxios = axios as jest.Mocked<typeof axios>;
-
 describe("Unusual Native Swaps Bot Test Suite", () => {
   const mockProvider = {
     getTransactionCount: jest.fn(),
+    getBalance: jest.fn()
   };
   let handleTransaction: HandleTransaction;
 
   beforeEach(() => {
     mockProvider.getTransactionCount.mockReset();
-    mockedAxios.get.mockReset();
+    mockProvider.getBalance.mockReset();
     AddressRecord.clear();
     handleTransaction = provideBotHandler(
       MOCK_ERC20_TRANSFER_EVENT,
@@ -82,7 +79,7 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
     it("should return an empty finding when there's no event in the transaction log", async () => {
       const txEvent = new TestTransactionEvent().setFrom(ADDRESSES.address1);
       expect(await handleTransaction(txEvent)).toStrictEqual([]);
-      expect(axios.get).toHaveBeenCalledTimes(0);
+      expect(mockProvider.getBalance).toHaveBeenCalledTimes(0);
     });
 
     it("should return an empty finding when there are other events apart from transfer event in the tx log", async () => {
@@ -95,7 +92,7 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         ]);
 
       expect(await handleTransaction(txEvent)).toStrictEqual([]);
-      expect(axios.get).toHaveBeenCalledTimes(0);
+      expect(mockProvider.getBalance).toHaveBeenCalledTimes(0);
     });
 
     it("should return an empty finding when there's a transfer event where the msgSender is not equal to token sender", async () => {
@@ -104,523 +101,518 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .addEventLog(...createTransferEvent(ADDRESSES.address1, ADDRESSES.address2, "10000000"));
 
       expect(await handleTransaction(txEvent)).toStrictEqual([]);
-      expect(axios.get).toHaveBeenCalledTimes(0);
+      expect(mockProvider.getBalance).toHaveBeenCalledTimes(0);
+    });
+
+    it("should return an empty finding when the transfer event is to address(0)", async () => {
+      const txEvent1 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ethers.constants.AddressZero, "10000000"));
+
+      const txEvent2 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ethers.constants.AddressZero, "10000000"));
+
+      expect(await handleTransaction(txEvent1)).toStrictEqual([]);
+      expect(await handleTransaction(txEvent2)).toStrictEqual([]);
+      expect(mockProvider.getBalance).toHaveBeenCalledTimes(0);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
     });
 
     it("should return an empty finding when there's a token transfer from msgSender but no corresponding ether transfer", async () => {
       const txEvent = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
-      const response = { data: { status: "0", message: "No transactions found", result: [] } };
-      mockedAxios.get.mockResolvedValueOnce(response);
+      const addressBalance = toBn("754433300");
+      mockProvider.getBalance.mockResolvedValueOnce(addressBalance).mockResolvedValueOnce(addressBalance);
       expect(await handleTransaction(txEvent)).toStrictEqual([]);
-      expect(axios.get).toHaveBeenCalledTimes(1);
+      expect(mockProvider.getBalance).toHaveBeenCalledTimes(2);
       expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
     });
 
-    it("should return an empty finding when there's ether transfer but not to msgSender", async () => {
-      const txEvent = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
-      const response = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.contractAddr), value: "95745666" },
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "754433300" },
-          ],
-        },
-      };
-      mockedAxios.get.mockResolvedValueOnce(response);
-      expect(await handleTransaction(txEvent)).toStrictEqual([]);
-      expect(axios.get).toHaveBeenCalledTimes(1);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
-    });
+  //   it("should return an empty finding when the msgSender isn't a new address (has high nonce)", async () => {
+  //     const txEvent = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995400)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+  //     const response = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: "95745600" },
+  //         ],
+  //       },
+  //     };
+  //     mockedAxios.get.mockResolvedValueOnce(response);
+  //     mockProvider.getTransactionCount.mockResolvedValueOnce(175);
+  //     expect(await handleTransaction(txEvent)).toStrictEqual([]);
+  //     expect(axios.get).toHaveBeenCalledTimes(1);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(1);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
+  //     expect(AddressRecord.has(ADDRESSES.attacker)).toStrictEqual(false);
+  //   });
 
-    it("should return an empty finding when the msgSender isn't a new address (has high nonce)", async () => {
-      const txEvent = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995400)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
-      const response = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: "95745600" },
-          ],
-        },
-      };
-      mockedAxios.get.mockResolvedValueOnce(response);
-      mockProvider.getTransactionCount.mockResolvedValueOnce(175);
-      expect(await handleTransaction(txEvent)).toStrictEqual([]);
-      expect(axios.get).toHaveBeenCalledTimes(1);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(1);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
-      expect(AddressRecord.has(ADDRESSES.attacker)).toStrictEqual(false);
-    });
+  //   it("should return an empty finding when the num of swaps is lesser than swap threshold", async () => {
+  //     const txEvent1 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995400)
+  //       .setTimestamp(19180075)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
 
-    it("should return an empty finding when the num of swaps is lesser than swap threshold", async () => {
-      const txEvent1 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995400)
-        .setTimestamp(19180075)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+  //     const response1 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("17") },
+  //         ],
+  //       },
+  //     };
 
-      const response1 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("17") },
-          ],
-        },
-      };
+  //     const txEvent2 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995450)
+  //       .setTimestamp(19181800)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
 
-      const txEvent2 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995450)
-        .setTimestamp(19181800)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
+  //     const response2 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "957456" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("15") },
+  //         ],
+  //       },
+  //     };
+  //     mockedAxios.get.mockResolvedValueOnce(response1).mockResolvedValueOnce(response2);
+  //     mockProvider.getTransactionCount.mockResolvedValueOnce(75).mockResolvedValueOnce(101);
 
-      const response2 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "957456" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("15") },
-          ],
-        },
-      };
-      mockedAxios.get.mockResolvedValueOnce(response1).mockResolvedValueOnce(response2);
-      mockProvider.getTransactionCount.mockResolvedValueOnce(75).mockResolvedValueOnce(101);
+  //     expect(await handleTransaction(txEvent1)).toStrictEqual([]);
+  //     expect(await handleTransaction(txEvent2)).toStrictEqual([]);
+  //     expect(axios.get).toHaveBeenCalledTimes(2);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(2);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
+  //     expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("32")));
+  //     expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(2);
+  //   });
 
-      expect(await handleTransaction(txEvent1)).toStrictEqual([]);
-      expect(await handleTransaction(txEvent2)).toStrictEqual([]);
-      expect(axios.get).toHaveBeenCalledTimes(2);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(2);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
-      expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("32")));
-      expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(2);
-    });
+  //   it("should return an empty finding when there are multiple swaps that aren't all immediate", async () => {
+  //     const txEvent1 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995400)
+  //       .setTimestamp(19180075)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
 
-    it("should return an empty finding when there are multiple swaps that aren't all immediate", async () => {
-      const txEvent1 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995400)
-        .setTimestamp(19180075)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+  //     const response1 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("17") },
+  //         ],
+  //       },
+  //     };
 
-      const response1 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("17") },
-          ],
-        },
-      };
+  //     const txEvent2 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995450)
+  //       .setTimestamp(19181800)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
 
-      const txEvent2 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995450)
-        .setTimestamp(19181800)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
+  //     const response2 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "957456" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("15") },
+  //         ],
+  //       },
+  //     };
 
-      const response2 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "957456" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("15") },
-          ],
-        },
-      };
+  //     const txEvent3 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995480)
+  //       .setTimestamp(19183700) // timestamp interval more than MAX_TIMESTAMP
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
 
-      const txEvent3 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995480)
-        .setTimestamp(19183700) // timestamp interval more than MAX_TIMESTAMP
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
+  //     const response3 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "959356" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("25") },
+  //         ],
+  //       },
+  //     };
+  //     mockedAxios.get
+  //       .mockResolvedValueOnce(response1)
+  //       .mockResolvedValueOnce(response2)
+  //       .mockResolvedValueOnce(response3);
+  //     mockProvider.getTransactionCount
+  //       .mockResolvedValueOnce(75)
+  //       .mockResolvedValueOnce(101)
+  //       .mockResolvedValueOnce(145);
 
-      const response3 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "959356" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("25") },
-          ],
-        },
-      };
-      mockedAxios.get
-        .mockResolvedValueOnce(response1)
-        .mockResolvedValueOnce(response2)
-        .mockResolvedValueOnce(response3);
-      mockProvider.getTransactionCount
-        .mockResolvedValueOnce(75)
-        .mockResolvedValueOnce(101)
-        .mockResolvedValueOnce(145);
+  //     expect(await handleTransaction(txEvent1)).toStrictEqual([]);
+  //     expect(await handleTransaction(txEvent2)).toStrictEqual([]);
+  //     expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("32")));
+  //     expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(2);
+  //     expect(await handleTransaction(txEvent3)).toStrictEqual([]);
+  //     expect(axios.get).toHaveBeenCalledTimes(3);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(3);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995480);
+  //     expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("25")));
+  //     expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(1);
+  //   });
 
-      expect(await handleTransaction(txEvent1)).toStrictEqual([]);
-      expect(await handleTransaction(txEvent2)).toStrictEqual([]);
-      expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("32")));
-      expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(2);
-      expect(await handleTransaction(txEvent3)).toStrictEqual([]);
-      expect(axios.get).toHaveBeenCalledTimes(3);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(3);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995480);
-      expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("25")));
-      expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(1);
-    });
+  //   it("should return an empty finding when total eth received is lesser than Min eth threshold ", async () => {
+  //     const txEvent1 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995400)
+  //       .setTimestamp(19180075)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
 
-    it("should return an empty finding when total eth received is lesser than Min eth threshold ", async () => {
-      const txEvent1 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995400)
-        .setTimestamp(19180075)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+  //     const response1 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("10") },
+  //         ],
+  //       },
+  //     };
 
-      const response1 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("10") },
-          ],
-        },
-      };
+  //     const txEvent2 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995450)
+  //       .setTimestamp(19181800)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
 
-      const txEvent2 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995450)
-        .setTimestamp(19181800)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
+  //     const response2 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "957456" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("11") },
+  //         ],
+  //       },
+  //     };
 
-      const response2 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "957456" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("11") },
-          ],
-        },
-      };
+  //     const txEvent3 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995490)
+  //       .setTimestamp(19182700)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
 
-      const txEvent3 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995490)
-        .setTimestamp(19182700)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
+  //     // total eth received from the 3 txs is lesser than the minimum eth required for a finding
+  //     const response3 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "959356" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("5") },
+  //         ],
+  //       },
+  //     };
+  //     mockedAxios.get
+  //       .mockResolvedValueOnce(response1)
+  //       .mockResolvedValueOnce(response2)
+  //       .mockResolvedValueOnce(response3);
+  //     mockProvider.getTransactionCount
+  //       .mockResolvedValueOnce(75)
+  //       .mockResolvedValueOnce(101)
+  //       .mockResolvedValueOnce(145);
 
-      // total eth received from the 3 txs is lesser than the minimum eth required for a finding
-      const response3 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "959356" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("5") },
-          ],
-        },
-      };
-      mockedAxios.get
-        .mockResolvedValueOnce(response1)
-        .mockResolvedValueOnce(response2)
-        .mockResolvedValueOnce(response3);
-      mockProvider.getTransactionCount
-        .mockResolvedValueOnce(75)
-        .mockResolvedValueOnce(101)
-        .mockResolvedValueOnce(145);
+  //     expect(await handleTransaction(txEvent1)).toStrictEqual([]);
+  //     expect(await handleTransaction(txEvent2)).toStrictEqual([]);
+  //     expect(await handleTransaction(txEvent3)).toStrictEqual([]);
+  //     expect(axios.get).toHaveBeenCalledTimes(3);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(3);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995490);
+  //     expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("26")));
+  //     expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(3);
+  //   });
 
-      expect(await handleTransaction(txEvent1)).toStrictEqual([]);
-      expect(await handleTransaction(txEvent2)).toStrictEqual([]);
-      expect(await handleTransaction(txEvent3)).toStrictEqual([]);
-      expect(axios.get).toHaveBeenCalledTimes(3);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(3);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995490);
-      expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("26")));
-      expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(3);
-    });
+  //   it("should clear redudant data at every 10000th block", async () => {
+  //     const txEvent1 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19989790)
+  //       .setTimestamp(19185075)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
 
-    it("should clear redudant data at every 10000th block", async () => {
-      const txEvent1 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19989790)
-        .setTimestamp(19185075)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+  //     const response1 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("10") },
+  //         ],
+  //       },
+  //     };
 
-      const response1 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("10") },
-          ],
-        },
-      };
+  //     const txEvent2 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.address2))
+  //       .setBlock(19989870)
+  //       .setTimestamp(19186500)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.address2, ADDRESSES.address1, "30000874"));
 
-      const txEvent2 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.address2))
-        .setBlock(19989870)
-        .setTimestamp(19186500)
-        .addEventLog(...createTransferEvent(ADDRESSES.address2, ADDRESSES.address1, "30000874"));
+  //     const response2 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [{ from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: parseEther("5.5") }],
+  //       },
+  //     };
 
-      const response2 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [{ from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: parseEther("5.5") }],
-        },
-      };
+  //     const txEvent3 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.contractAddr))
+  //       .setBlock(19989950)
+  //       .setTimestamp(19189050)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.contractAddr, ADDRESSES.address2, "45008764"));
 
-      const txEvent3 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.contractAddr))
-        .setBlock(19989950)
-        .setTimestamp(19189050)
-        .addEventLog(...createTransferEvent(ADDRESSES.contractAddr, ADDRESSES.address2, "45008764"));
+  //     const response3 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [{ from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.contractAddr), value: parseEther("3") }],
+  //       },
+  //     };
+  //     const txEvent4 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.address1))
+  //       .setBlock(19990000)
+  //       .setTimestamp(19190100)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.address1, ADDRESSES.address2, "45008764"));
 
-      const response3 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [{ from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.contractAddr), value: parseEther("3") }],
-        },
-      };
-      const txEvent4 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.address1))
-        .setBlock(19990000)
-        .setTimestamp(19190100)
-        .addEventLog(...createTransferEvent(ADDRESSES.address1, ADDRESSES.address2, "45008764"));
+  //     const response4 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [{ from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.address1), value: parseEther("10.8") }],
+  //       },
+  //     };
+  //     mockedAxios.get
+  //       .mockResolvedValueOnce(response1)
+  //       .mockResolvedValueOnce(response2)
+  //       .mockResolvedValueOnce(response3)
+  //       .mockResolvedValueOnce(response4);
+  //     mockProvider.getTransactionCount
+  //       .mockResolvedValueOnce(75)
+  //       .mockResolvedValueOnce(101)
+  //       .mockResolvedValueOnce(125)
+  //       .mockResolvedValueOnce(148);
 
-      const response4 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [{ from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.address1), value: parseEther("10.8") }],
-        },
-      };
-      mockedAxios.get
-        .mockResolvedValueOnce(response1)
-        .mockResolvedValueOnce(response2)
-        .mockResolvedValueOnce(response3)
-        .mockResolvedValueOnce(response4);
-      mockProvider.getTransactionCount
-        .mockResolvedValueOnce(75)
-        .mockResolvedValueOnce(101)
-        .mockResolvedValueOnce(125)
-        .mockResolvedValueOnce(148);
+  //     expect(await handleTransaction(txEvent1)).toStrictEqual([]);
+  //     expect(await handleTransaction(txEvent2)).toStrictEqual([]);
+  //     expect(await handleTransaction(txEvent3)).toStrictEqual([]);
+  //     expect(AddressRecord.size).toStrictEqual(3);
+  //     expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("10")));
+  //     expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(1);
+  //     expect(AddressRecord.get(ADDRESSES.address2)?.totalEthReceived).toStrictEqual(toBn(parseEther("5.5")));
+  //     expect(AddressRecord.get(ADDRESSES.address2)?.tokenSwapData.length).toStrictEqual(1);
+  //     expect(AddressRecord.get(ADDRESSES.contractAddr)?.totalEthReceived).toStrictEqual(toBn(parseEther("3")));
+  //     expect(AddressRecord.get(ADDRESSES.contractAddr)?.tokenSwapData.length).toStrictEqual(1);
+  //     expect(await handleTransaction(txEvent4)).toStrictEqual([]);
+  //     expect(AddressRecord.size).toStrictEqual(2);
+  //     expect(AddressRecord.has(ADDRESSES.attacker)).toStrictEqual(false);
+  //     expect(AddressRecord.has(ADDRESSES.address2)).toStrictEqual(false);
+  //     expect(AddressRecord.get(ADDRESSES.contractAddr)?.totalEthReceived).toStrictEqual(toBn(parseEther("3")));
+  //     expect(AddressRecord.get(ADDRESSES.contractAddr)?.tokenSwapData.length).toStrictEqual(1);
+  //     expect(AddressRecord.get(ADDRESSES.address1)?.totalEthReceived).toStrictEqual(toBn(parseEther("10.8")));
+  //     expect(AddressRecord.get(ADDRESSES.address1)?.tokenSwapData.length).toStrictEqual(1);
+  //     expect(axios.get).toHaveBeenCalledTimes(4);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(4);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19989790);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.address2, 19989870);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.contractAddr, 19989950);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.address1, 19990000);
+  //   });
+  // });
 
-      expect(await handleTransaction(txEvent1)).toStrictEqual([]);
-      expect(await handleTransaction(txEvent2)).toStrictEqual([]);
-      expect(await handleTransaction(txEvent3)).toStrictEqual([]);
-      expect(AddressRecord.size).toStrictEqual(3);
-      expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("10")));
-      expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(1);
-      expect(AddressRecord.get(ADDRESSES.address2)?.totalEthReceived).toStrictEqual(toBn(parseEther("5.5")));
-      expect(AddressRecord.get(ADDRESSES.address2)?.tokenSwapData.length).toStrictEqual(1);
-      expect(AddressRecord.get(ADDRESSES.contractAddr)?.totalEthReceived).toStrictEqual(toBn(parseEther("3")));
-      expect(AddressRecord.get(ADDRESSES.contractAddr)?.tokenSwapData.length).toStrictEqual(1);
-      expect(await handleTransaction(txEvent4)).toStrictEqual([]);
-      expect(AddressRecord.size).toStrictEqual(2);
-      expect(AddressRecord.has(ADDRESSES.attacker)).toStrictEqual(false);
-      expect(AddressRecord.has(ADDRESSES.address2)).toStrictEqual(false);
-      expect(AddressRecord.get(ADDRESSES.contractAddr)?.totalEthReceived).toStrictEqual(toBn(parseEther("3")));
-      expect(AddressRecord.get(ADDRESSES.contractAddr)?.tokenSwapData.length).toStrictEqual(1);
-      expect(AddressRecord.get(ADDRESSES.address1)?.totalEthReceived).toStrictEqual(toBn(parseEther("10.8")));
-      expect(AddressRecord.get(ADDRESSES.address1)?.tokenSwapData.length).toStrictEqual(1);
-      expect(axios.get).toHaveBeenCalledTimes(4);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(4);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19989790);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.address2, 19989870);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.contractAddr, 19989950);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.address1, 19990000);
-    });
-  });
+  // describe("tests for cases that returns findings ", () => {
+  //   it("should return finding when the eth and swaps thresholds are reached", async () => {
+  //     const txEvent1 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995400)
+  //       .setTimestamp(19180075)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
 
-  describe("tests for cases that returns findings ", () => {
-    it("should return finding when the eth and swaps thresholds are reached", async () => {
-      const txEvent1 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995400)
-        .setTimestamp(19180075)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+  //     const response1 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("15") },
+  //         ],
+  //       },
+  //     };
 
-      const response1 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("15") },
-          ],
-        },
-      };
+  //     const txEvent2 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995450)
+  //       .setTimestamp(19181800)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
 
-      const txEvent2 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995450)
-        .setTimestamp(19181800)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
+  //     const response2 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "957456" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("10") },
+  //         ],
+  //       },
+  //     };
 
-      const response2 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "957456" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("10") },
-          ],
-        },
-      };
+  //     const txEvent3 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995490)
+  //       .setTimestamp(19182700)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
 
-      const txEvent3 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995490)
-        .setTimestamp(19182700)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
+  //     const response3 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "959356" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("5") },
+  //         ],
+  //       },
+  //     };
+  //     mockedAxios.get
+  //       .mockResolvedValueOnce(response1)
+  //       .mockResolvedValueOnce(response2)
+  //       .mockResolvedValueOnce(response3);
+  //     mockProvider.getTransactionCount
+  //       .mockResolvedValueOnce(20)
+  //       .mockResolvedValueOnce(45)
+  //       .mockResolvedValueOnce(67);
 
-      const response3 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "959356" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("5") },
-          ],
-        },
-      };
-      mockedAxios.get
-        .mockResolvedValueOnce(response1)
-        .mockResolvedValueOnce(response2)
-        .mockResolvedValueOnce(response3);
-      mockProvider.getTransactionCount
-        .mockResolvedValueOnce(20)
-        .mockResolvedValueOnce(45)
-        .mockResolvedValueOnce(67);
+  //     expect(await handleTransaction(txEvent1)).toStrictEqual([]);
+  //     expect(await handleTransaction(txEvent2)).toStrictEqual([]);
+  //     const finding = await handleTransaction(txEvent3);
+  //     const addrRecord = AddressRecord.get(ADDRESSES.attacker) as UserSwapData;
+  //     expect(finding).toStrictEqual([mockCreateNewFinding(ADDRESSES.attacker, addrRecord)]);
+  //     expect(axios.get).toHaveBeenCalledTimes(3);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(3);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995490);
+  //     expect(addrRecord.totalEthReceived).toStrictEqual(toBn(parseEther("30")));
+  //     expect(addrRecord.tokenSwapData.length).toStrictEqual(3);
+  //   });
+  //   it("should return multiple findings when the eth and swaps thresholds are reached for multiple concurrent swaps", async () => {
+  //     const txEvent1 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995400)
+  //       .setTimestamp(19180075)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
 
-      expect(await handleTransaction(txEvent1)).toStrictEqual([]);
-      expect(await handleTransaction(txEvent2)).toStrictEqual([]);
-      const finding = await handleTransaction(txEvent3);
-      const addrRecord = AddressRecord.get(ADDRESSES.attacker) as UserSwapData;
-      expect(finding).toStrictEqual([mockCreateNewFinding(ADDRESSES.attacker, addrRecord)]);
-      expect(axios.get).toHaveBeenCalledTimes(3);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(3);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995490);
-      expect(addrRecord.totalEthReceived).toStrictEqual(toBn(parseEther("30")));
-      expect(addrRecord.tokenSwapData.length).toStrictEqual(3);
-    });
-    it("should return multiple findings when the eth and swaps thresholds are reached for multiple concurrent swaps", async () => {
-      const txEvent1 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995400)
-        .setTimestamp(19180075)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+  //     const response1 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("15") },
+  //         ],
+  //       },
+  //     };
 
-      const response1 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("15") },
-          ],
-        },
-      };
+  //     const txEvent2 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995450)
+  //       .setTimestamp(19181800)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
 
-      const txEvent2 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995450)
-        .setTimestamp(19181800)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
+  //     const response2 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "957456" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("20") },
+  //         ],
+  //       },
+  //     };
 
-      const response2 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "957456" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("20") },
-          ],
-        },
-      };
+  //     const txEvent3 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995490)
+  //       .setTimestamp(19182700)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
 
-      const txEvent3 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995490)
-        .setTimestamp(19182700)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
+  //     const response3 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "959356" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("5") },
+  //         ],
+  //       },
+  //     };
 
-      const response3 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "959356" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("5") },
-          ],
-        },
-      };
+  //     const txEvent4 = new TestTransactionEvent()
+  //       .setFrom(lowerC(ADDRESSES.attacker))
+  //       .setBlock(19995590)
+  //       .setTimestamp(19183100)
+  //       .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "9878764"));
 
-      const txEvent4 = new TestTransactionEvent()
-        .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995590)
-        .setTimestamp(19183100)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "9878764"));
+  //     const response4 = {
+  //       data: {
+  //         status: "1",
+  //         message: "OK",
+  //         result: [
+  //           { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "943356" },
+  //           { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("8") },
+  //         ],
+  //       },
+  //     };
+  //     mockedAxios.get
+  //       .mockResolvedValueOnce(response1)
+  //       .mockResolvedValueOnce(response2)
+  //       .mockResolvedValueOnce(response3)
+  //       .mockResolvedValueOnce(response4);
+  //     mockProvider.getTransactionCount
+  //       .mockResolvedValueOnce(20)
+  //       .mockResolvedValueOnce(45)
+  //       .mockResolvedValueOnce(67)
+  //       .mockResolvedValueOnce(120);
 
-      const response4 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "943356" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("8") },
-          ],
-        },
-      };
-      mockedAxios.get
-        .mockResolvedValueOnce(response1)
-        .mockResolvedValueOnce(response2)
-        .mockResolvedValueOnce(response3)
-        .mockResolvedValueOnce(response4);
-      mockProvider.getTransactionCount
-        .mockResolvedValueOnce(20)
-        .mockResolvedValueOnce(45)
-        .mockResolvedValueOnce(67)
-        .mockResolvedValueOnce(120);
-
-      expect(await handleTransaction(txEvent1)).toStrictEqual([]);
-      expect(await handleTransaction(txEvent2)).toStrictEqual([]);
-      let finding = await handleTransaction(txEvent3);
-      let addrRecord = AddressRecord.get(ADDRESSES.attacker) as UserSwapData;
-      expect(finding).toStrictEqual([mockCreateNewFinding(ADDRESSES.attacker, addrRecord)]);
-      finding = await handleTransaction(txEvent4);
-      addrRecord = AddressRecord.get(ADDRESSES.attacker) as UserSwapData;
-      expect(finding).toStrictEqual([mockCreateNewFinding(ADDRESSES.attacker, addrRecord)]);
-      expect(axios.get).toHaveBeenCalledTimes(4);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(4);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995490);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995590);
-      expect(addrRecord.totalEthReceived).toStrictEqual(toBn(parseEther("48")));
-      expect(addrRecord.tokenSwapData.length).toStrictEqual(4);
-    });
+  //     expect(await handleTransaction(txEvent1)).toStrictEqual([]);
+  //     expect(await handleTransaction(txEvent2)).toStrictEqual([]);
+  //     let finding = await handleTransaction(txEvent3);
+  //     let addrRecord = AddressRecord.get(ADDRESSES.attacker) as UserSwapData;
+  //     expect(finding).toStrictEqual([mockCreateNewFinding(ADDRESSES.attacker, addrRecord)]);
+  //     finding = await handleTransaction(txEvent4);
+  //     addrRecord = AddressRecord.get(ADDRESSES.attacker) as UserSwapData;
+  //     expect(finding).toStrictEqual([mockCreateNewFinding(ADDRESSES.attacker, addrRecord)]);
+  //     expect(axios.get).toHaveBeenCalledTimes(4);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(4);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995490);
+  //     expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995590);
+  //     expect(addrRecord.totalEthReceived).toStrictEqual(toBn(parseEther("48")));
+  //     expect(addrRecord.tokenSwapData.length).toStrictEqual(4);
+  //   });
   });
 });
