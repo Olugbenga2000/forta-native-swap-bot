@@ -4,7 +4,7 @@ import { createOrUpdateData, toBn, toCs, deleteRedundantData } from "./utils";
 import { AddressRecord } from "./swap";
 import { createNewFinding } from "./finding";
 import { MINIMUM_SWAP_COUNT, ERC20_TRANSFER_EVENT, LOW_NONCE_THRESHOLD } from "./constants";
-import NetworkManager from "./network";
+import NetworkManager, { NETWORK_MAP } from "./network";
 
 const networkManager = new NetworkManager();
 export let totalNativeSwaps = 0;
@@ -20,20 +20,16 @@ export const provideBotHandler = (
   provider: ethers.providers.JsonRpcProvider,
   lowTxCount: number,
   swapCountThreshold: number,
-  networkManager: NetworkManager
+  network: NetworkManager
 ): HandleTransaction => async (txEvent: TransactionEvent): Promise<Finding[]> => {
   const findings: Finding[] = [];
   const { from, hash, timestamp, blockNumber } = txEvent;
-
   // remove redundant data from the AddressRecord Map and get latest price from chainlink oracle every 10000 blocks
   if (blockNumber % 10000 === 0) {
     deleteRedundantData(timestamp);
-    networkManager.getLatestPriceFeed(provider);
-  }
-  
-
+    await network.getLatestPriceFeed(provider);
+  };
   const msgSender = toCs(from);
-
   // check the transaction logs for erc20 transfer events where token sender is msg.sender
   const erc20TransferEventsFromMsgSender = txEvent
     .filterLog(erc20TransferEvent)
@@ -55,7 +51,7 @@ export const provideBotHandler = (
    * the number of swaps is greater than the swap count threshold (Attackers typically swap multiple tokens
    * when laundering stolen funds)
    */
-  const minNativeThreshold = toBn(ethers.utils.parseEther(networkManager.minNativeThreshold).toString())
+  const minNativeThreshold = toBn(ethers.utils.parseEther(network.minNativeThreshold).toString());
   if (
     addressRecord?.totalEthReceived.gte(minNativeThreshold) &&
     addressRecord.tokenSwapData.length >= swapCountThreshold
