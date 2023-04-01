@@ -28,7 +28,7 @@ export const provideBotHandler = (
   if (blockNumber % 10000 === 0) {
     deleteRedundantData(timestamp);
     await network.getLatestPriceFeed(provider);
-  };
+  }
   const msgSender = toCs(from);
   // check the transaction logs for erc20 transfer events where token sender is msg.sender
   const erc20TransferEventsFromMsgSender = txEvent
@@ -36,8 +36,8 @@ export const provideBotHandler = (
     .filter(log => log.args.from === msgSender && log.args.to !== ethers.constants.AddressZero);
   if (!erc20TransferEventsFromMsgSender.length) return findings;
   // Compare account balance at previous block to balance at current block to determine if a swap occured
-  const previousBalance  = toBn((await provider.getBalance(msgSender, blockNumber - 1)).toString());
-  const currentBalance  = toBn((await provider.getBalance(msgSender, blockNumber)).toString());
+  const previousBalance = toBn((await provider.getBalance(msgSender, blockNumber - 1)).toString());
+  const currentBalance = toBn((await provider.getBalance(msgSender, blockNumber)).toString());
   const ethBalanceDiff = currentBalance.minus(previousBalance);
   if (ethBalanceDiff.lte(0)) return findings;
   totalNativeSwaps++;

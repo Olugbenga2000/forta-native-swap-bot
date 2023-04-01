@@ -21,7 +21,7 @@ const createOrUpdateData = (
     (log): Erc20TransferData => ({
       address: log.address,
       amount: toBn(log.args.value),
-      txHash
+      txHash,
     })
   );
   const txSwapData: TxSwapData = {

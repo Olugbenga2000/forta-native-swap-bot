@@ -59,13 +59,13 @@ const createTransferEvent = (from: string, to: string, value: string): [ethers.u
 describe("Unusual Native Swaps Bot Test Suite", () => {
   const mockProvider = {
     getTransactionCount: jest.fn(),
-    getBalance: jest.fn()
+    getBalance: jest.fn(),
   };
   const mockNetworkManager: NetworkManager = {
     minNativeThreshold: "30",
     nativeUsdAggregator: createChecksumAddress("0x12"),
     setNetwork: jest.fn(),
-    getLatestPriceFeed: jest.fn()
+    getLatestPriceFeed: jest.fn(),
   };
   let handleTransaction: HandleTransaction;
 
@@ -164,9 +164,12 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .setBlock(19995450)
         .setTimestamp(19181800)
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
-      
-      mockProvider.getBalance.mockResolvedValueOnce(prevBal1).mockResolvedValueOnce(currentBal1)
-      .mockResolvedValueOnce(currentBal1).mockResolvedValueOnce(currentBal1.add(parseEther("15")));
+
+      mockProvider.getBalance
+        .mockResolvedValueOnce(prevBal1)
+        .mockResolvedValueOnce(currentBal1)
+        .mockResolvedValueOnce(currentBal1)
+        .mockResolvedValueOnce(currentBal1.add(parseEther("15")));
       mockProvider.getTransactionCount.mockResolvedValueOnce(75).mockResolvedValueOnce(101);
 
       expect(await handleTransaction(txEvent1)).toStrictEqual([]);
@@ -201,9 +204,13 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       const [prevBal1, currentBal1] = [parseEther("1"), parseEther("18")];
       const [prevBal2, currentBal2] = [parseEther("20"), parseEther("35")];
       const [prevBal3, currentBal3] = [parseEther("23"), parseEther("48")];
-      mockProvider.getBalance.mockResolvedValueOnce(prevBal1).mockResolvedValueOnce(currentBal1)
-      .mockResolvedValueOnce(prevBal2).mockResolvedValueOnce(currentBal2)
-      .mockResolvedValueOnce(prevBal3).mockResolvedValueOnce(currentBal3);
+      mockProvider.getBalance
+        .mockResolvedValueOnce(prevBal1)
+        .mockResolvedValueOnce(currentBal1)
+        .mockResolvedValueOnce(prevBal2)
+        .mockResolvedValueOnce(currentBal2)
+        .mockResolvedValueOnce(prevBal3)
+        .mockResolvedValueOnce(currentBal3);
       mockProvider.getTransactionCount
         .mockResolvedValueOnce(75)
         .mockResolvedValueOnce(101)
@@ -247,9 +254,13 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       const [prevBal2, currentBal2] = [parseEther("20"), parseEther("31")];
       const [prevBal3, currentBal3] = [parseEther("23"), parseEther("28")];
 
-      mockProvider.getBalance.mockResolvedValueOnce(prevBal1).mockResolvedValueOnce(currentBal1)
-      .mockResolvedValueOnce(prevBal2).mockResolvedValueOnce(currentBal2)
-      .mockResolvedValueOnce(prevBal3).mockResolvedValueOnce(currentBal3);
+      mockProvider.getBalance
+        .mockResolvedValueOnce(prevBal1)
+        .mockResolvedValueOnce(currentBal1)
+        .mockResolvedValueOnce(prevBal2)
+        .mockResolvedValueOnce(currentBal2)
+        .mockResolvedValueOnce(prevBal3)
+        .mockResolvedValueOnce(currentBal3);
       mockProvider.getTransactionCount
         .mockResolvedValueOnce(75)
         .mockResolvedValueOnce(101)
@@ -297,10 +308,15 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       const [prevBal3, currentBal3] = [parseEther("5"), parseEther("8")];
       const [prevBal4, currentBal4] = [parseEther("2"), parseEther("12.8")];
 
-      mockProvider.getBalance.mockResolvedValueOnce(prevBal1).mockResolvedValueOnce(currentBal1)
-      .mockResolvedValueOnce(prevBal2).mockResolvedValueOnce(currentBal2)
-      .mockResolvedValueOnce(prevBal3).mockResolvedValueOnce(currentBal3)
-      .mockResolvedValueOnce(prevBal4).mockResolvedValueOnce(currentBal4);
+      mockProvider.getBalance
+        .mockResolvedValueOnce(prevBal1)
+        .mockResolvedValueOnce(currentBal1)
+        .mockResolvedValueOnce(prevBal2)
+        .mockResolvedValueOnce(currentBal2)
+        .mockResolvedValueOnce(prevBal3)
+        .mockResolvedValueOnce(currentBal3)
+        .mockResolvedValueOnce(prevBal4)
+        .mockResolvedValueOnce(currentBal4);
       mockProvider.getTransactionCount
         .mockResolvedValueOnce(75)
         .mockResolvedValueOnce(101)
@@ -359,9 +375,13 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       const [prevBal2, currentBal2] = [parseEther("10"), parseEther("20")];
       const [prevBal3, currentBal3] = [parseEther("5"), parseEther("10")];
 
-      mockProvider.getBalance.mockResolvedValueOnce(prevBal1).mockResolvedValueOnce(currentBal1)
-      .mockResolvedValueOnce(prevBal2).mockResolvedValueOnce(currentBal2)
-      .mockResolvedValueOnce(prevBal3).mockResolvedValueOnce(currentBal3);
+      mockProvider.getBalance
+        .mockResolvedValueOnce(prevBal1)
+        .mockResolvedValueOnce(currentBal1)
+        .mockResolvedValueOnce(prevBal2)
+        .mockResolvedValueOnce(currentBal2)
+        .mockResolvedValueOnce(prevBal3)
+        .mockResolvedValueOnce(currentBal3);
 
       mockProvider.getTransactionCount
         .mockResolvedValueOnce(20)
@@ -424,10 +444,15 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       const [prevBal3, currentBal3] = [parseEther("29"), parseEther("34")];
       const [prevBal4, currentBal4] = [parseEther("34"), parseEther("42")];
 
-      mockProvider.getBalance.mockResolvedValueOnce(prevBal1).mockResolvedValueOnce(currentBal1)
-      .mockResolvedValueOnce(prevBal2).mockResolvedValueOnce(currentBal2)
-      .mockResolvedValueOnce(prevBal3).mockResolvedValueOnce(currentBal3)
-      .mockResolvedValueOnce(prevBal4).mockResolvedValueOnce(currentBal4);
+      mockProvider.getBalance
+        .mockResolvedValueOnce(prevBal1)
+        .mockResolvedValueOnce(currentBal1)
+        .mockResolvedValueOnce(prevBal2)
+        .mockResolvedValueOnce(currentBal2)
+        .mockResolvedValueOnce(prevBal3)
+        .mockResolvedValueOnce(currentBal3)
+        .mockResolvedValueOnce(prevBal4)
+        .mockResolvedValueOnce(currentBal4);
       mockProvider.getTransactionCount
         .mockResolvedValueOnce(20)
         .mockResolvedValueOnce(45)
