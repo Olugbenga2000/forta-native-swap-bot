@@ -7,6 +7,7 @@ import { toBn } from "./utils";
 import { createMetadata } from "./finding";
 import { UserSwapData, AddressRecord } from "./swap";
 import { ERC20_TRANSFER_EVENT as MOCK_ERC20_TRANSFER_EVENT } from "./constants";
+import NetworkManager from "./network";
 BigNumber.set({ DECIMAL_PLACES: 18 });
 
 const lowerC = (address: string) => address.toLowerCase();
@@ -60,6 +61,12 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
     getTransactionCount: jest.fn(),
     getBalance: jest.fn()
   };
+  const mockNetworkManager: NetworkManager = {
+    minNativeThreshold: "30",
+    nativeUsdAggregator: createChecksumAddress("0x12"),
+    setNetwork: jest.fn(),
+    getLatestPriceFeed: jest.fn()
+  };
   let handleTransaction: HandleTransaction;
 
   beforeEach(() => {
@@ -71,7 +78,7 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       (mockProvider as unknown) as ethers.providers.JsonRpcProvider,
       MOCK_LOW_TRANSACTION_COUNT_THRESHOLD,
       MOCK_MINIMUM_SWAP_COUNT,
-      MOCK_MIN_ETH_THRESHOLD
+      mockNetworkManager
     );
   });
 
