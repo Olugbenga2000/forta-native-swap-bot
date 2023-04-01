@@ -3,26 +3,34 @@ import BigNumber from "bignumber.js";
 import { createOrUpdateData, toBn, toCs, deleteRedundantData } from "./utils";
 import { AddressRecord } from "./swap";
 import { createNewFinding } from "./finding";
-import { MINIMUM_SWAP_COUNT, ERC20_TRANSFER_EVENT, LOW_NONCE_THRESHOLD, MIN_ETH_THRESHOLD } from "./constants";
+import { MINIMUM_SWAP_COUNT, ERC20_TRANSFER_EVENT, LOW_NONCE_THRESHOLD } from "./constants";
 import NetworkManager from "./network";
-const network = new NetworkManager;
-network.setNetwork(1);
-network.updateThreshold(1, getEthersProvider())
+
+const networkManager = new NetworkManager();
 export let totalNativeSwaps = 0;
 let unusualNativeSwaps = 0;
+
+export const initialize = (provider: ethers.providers.Provider) => async () => {
+  const { chainId } = await provider.getNetwork();
+  networkManager.setNetwork(chainId);
+};
 
 export const provideBotHandler = (
   erc20TransferEvent: string,
   provider: ethers.providers.JsonRpcProvider,
   lowTxCount: number,
   swapCountThreshold: number,
-  minEthThreshold: BigNumber
+  networkManager: NetworkManager
 ): HandleTransaction => async (txEvent: TransactionEvent): Promise<Finding[]> => {
   const findings: Finding[] = [];
   const { from, hash, timestamp, blockNumber } = txEvent;
 
-  // remove redundant data from the AddressRecord Map every 10000 blocks
-  if (blockNumber % 10000 === 0) deleteRedundantData(timestamp);
+  // remove redundant data from the AddressRecord Map and get latest price from chainlink oracle every 10000 blocks
+  if (blockNumber % 10000 === 0) {
+    deleteRedundantData(timestamp);
+    networkManager.getLatestPriceFeed(provider);
+  }
+  
 
   const msgSender = toCs(from);
 
@@ -47,9 +55,9 @@ export const provideBotHandler = (
    * the number of swaps is greater than the swap count threshold (Attackers typically swap multiple tokens
    * when laundering stolen funds)
    */
-
+  const minNativeThreshold = toBn(ethers.utils.parseEther(networkManager.minNativeThreshold).toString())
   if (
-    addressRecord?.totalEthReceived.gte(minEthThreshold) &&
+    addressRecord?.totalEthReceived.gte(minNativeThreshold) &&
     addressRecord.tokenSwapData.length >= swapCountThreshold
   ) {
     unusualNativeSwaps++;
@@ -61,11 +69,12 @@ export const provideBotHandler = (
 };
 
 export default {
+  initialize: initialize(getEthersProvider()),
   handleTransaction: provideBotHandler(
     ERC20_TRANSFER_EVENT,
     getEthersProvider(),
     LOW_NONCE_THRESHOLD,
     MINIMUM_SWAP_COUNT,
-    toBn(ethers.utils.parseEther(MIN_ETH_THRESHOLD.toString()).toString())
+    networkManager
   ),
 };
