@@ -6,11 +6,6 @@ This bot detects if an address with low nonce swaps several ERC-20 tokens to a l
 amount of native token over multiple transactions within a limited interval of time 
 using decentralized exchanges. 
 
-The bot uses Etherscan API to fetch internal transactions so an etherscan api key is 
-needed to run the bot successfully. Create a `.env` file in the project directory and 
-add the api key.
- - `KEY = "YOUR-API-KEY"`
-
 
 ## Supported Chains
 
