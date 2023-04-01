@@ -4,7 +4,10 @@ import { createOrUpdateData, toBn, toCs, deleteRedundantData } from "./utils";
 import { AddressRecord } from "./swap";
 import { createNewFinding } from "./finding";
 import { MINIMUM_SWAP_COUNT, ERC20_TRANSFER_EVENT, LOW_NONCE_THRESHOLD, MIN_ETH_THRESHOLD } from "./constants";
-
+import NetworkManager from "./network";
+const network = new NetworkManager;
+network.setNetwork(1);
+network.updateThreshold(1, getEthersProvider())
 export let totalNativeSwaps = 0;
 let unusualNativeSwaps = 0;
 
