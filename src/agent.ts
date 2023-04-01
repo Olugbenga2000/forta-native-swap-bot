@@ -4,7 +4,7 @@ import { createOrUpdateData, toBn, toCs, deleteRedundantData } from "./utils";
 import { AddressRecord } from "./swap";
 import { createNewFinding } from "./finding";
 import { MINIMUM_SWAP_COUNT, ERC20_TRANSFER_EVENT, LOW_NONCE_THRESHOLD } from "./constants";
-import NetworkManager, { NETWORK_MAP } from "./network";
+import NetworkManager from "./network";
 
 const networkManager = new NetworkManager();
 export let totalNativeSwaps = 0;
