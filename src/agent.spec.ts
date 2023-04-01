@@ -59,13 +59,13 @@ const createTransferEvent = (from: string, to: string, value: string): [ethers.u
 describe("Unusual Native Swaps Bot Test Suite", () => {
   const mockProvider = {
     getTransactionCount: jest.fn(),
-    getBalance: jest.fn()
+    getBalance: jest.fn(),
   };
   const mockNetworkManager: NetworkManager = {
     minNativeThreshold: "30",
     nativeUsdAggregator: createChecksumAddress("0x12"),
     setNetwork: jest.fn(),
-    getLatestPriceFeed: jest.fn()
+    getLatestPriceFeed: jest.fn(),
   };
   let handleTransaction: HandleTransaction;
 
