@@ -16,7 +16,6 @@ const parseEther = (ether: string) => ethers.utils.parseEther(ether);
 const MOCK_MINIMUM_SWAP_COUNT = 3;
 const MOCK_ERC20_APPROVAL_EVENT = "event Approval(address indexed owner, address indexed spender, uint256 value)";
 const MOCK_LOW_TRANSACTION_COUNT_THRESHOLD = 150;
-const MOCK_MIN_ETH_THRESHOLD = toBn(parseEther("30"));
 let mockUnusualNativeSwaps = 0;
 
 const ADDRESSES = {

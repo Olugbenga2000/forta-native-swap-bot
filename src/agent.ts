@@ -1,5 +1,4 @@
-import { Finding, Initialize, HandleTransaction, TransactionEvent, getEthersProvider, ethers } from "forta-agent";
-import BigNumber from "bignumber.js";
+import { Finding, HandleTransaction, TransactionEvent, getEthersProvider, ethers } from "forta-agent";
 import { createOrUpdateData, toBn, toCs, deleteRedundantData } from "./utils";
 import { AddressRecord } from "./swap";
 import { createNewFinding } from "./finding";
