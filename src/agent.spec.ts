@@ -410,17 +410,6 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .setHash("0x12347")
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
 
-      const response1 = {
-        data: {
-          status: "1",
-          message: "OK",
-          result: [
-            { from: lowerC(ADDRESSES.address1), to: lowerC(ADDRESSES.address2), value: "95745600" },
-            { from: lowerC(ADDRESSES.address2), to: lowerC(ADDRESSES.attacker), value: parseEther("15") },
-          ],
-        },
-      };
-
       const txEvent2 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995450)
