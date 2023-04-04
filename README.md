@@ -50,7 +50,7 @@ using decentralized exchanges.
   - `MINIMUM_SWAP_COUNT` : This refers to the minimum number of concurrent native swaps an address must make
   for it to be considered for a finding. Any number of native swaps by an address below this value won't emit a finding even if all other conditions are fullfilled. The default value is 2 and can be adjusted by setting the `MINIMUM_SWAP_COUNT` in `src/constants` file, L1.
 
-  - `MIN_ETH_THRESHOLD`: This refers to the minimum number of native currency that must be received by an address across multiple concurrent native swaps to emit a finding. The default value is 30 and can be adjusted by setting the `MIN_ETH_THRESHOLD` in `src/constants` file, L4.
+  - `MIN_DOLLAR_THRESHOLD`: This refers to the minimum dollar amount that must be received by an address across multiple concurrent native swaps to emit a finding. The default value is 55000 and can be adjusted by setting the `MIN_DOLLAR_THRESHOLD` in `src/constants` file, L4.
 
 ## Test Data
 
