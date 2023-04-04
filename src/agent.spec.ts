@@ -29,7 +29,7 @@ const mockCreateNewFinding = (sender: string, addrRecord: UserSwapData): Finding
   mockUnusualNativeSwaps++;
   const adScore = mockUnusualNativeSwaps / totalNativeSwaps;
   return Finding.fromObject({
-    name: "Unusual Native Swaps Forta Detection Bot",
+    name: "Unusual Native Swaps",
     description: `Unusual native swap behavior by ${sender} has been detected`,
     alertId: "UNUSUAL-NATIVE-SWAPS",
     severity: FindingSeverity.Medium,
@@ -133,7 +133,7 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       mockProvider.getBalance.mockResolvedValueOnce(prevBal).mockResolvedValueOnce(prevBal.sub("100098"));
       expect(await handleTransaction(txEvent)).toStrictEqual([]);
       expect(mockProvider.getBalance).toHaveBeenCalledTimes(2);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(1);
     });
 
     it("should return an empty finding when the msgSender isn't a new address (has high nonce)", async () => {

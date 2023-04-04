@@ -35,12 +35,14 @@ export const provideBotHandler = (
     .filter(log => log.args.from === msgSender && log.args.to !== ethers.constants.AddressZero);
   if (!erc20TransferEventsFromMsgSender.length) return findings;
   // Compare account balance at previous block to balance at current block to determine if a swap occured
-  const previousBalance = toBn((await provider.getBalance(msgSender, blockNumber - 1)).toString());
-  const currentBalance = toBn((await provider.getBalance(msgSender, blockNumber)).toString());
-  const ethBalanceDiff = currentBalance.minus(previousBalance);
+ const [previousBalance, currentBalance, nonce] = await Promise.all([
+    provider.getBalance(msgSender, blockNumber - 1),
+    provider.getBalance(msgSender, blockNumber),
+    provider.getTransactionCount(msgSender, blockNumber)
+  ]);
+  const ethBalanceDiff = toBn(currentBalance.toString()).minus(toBn(previousBalance.toString()));
   if (ethBalanceDiff.lte(0)) return findings;
   totalNativeSwaps++;
-  const nonce = await provider.getTransactionCount(msgSender, blockNumber);
   // Check if msg.sender's address is new
   if (nonce > lowTxCount) return findings;
   createOrUpdateData(ethBalanceDiff, hash, msgSender, blockNumber, timestamp, erc20TransferEventsFromMsgSender);
