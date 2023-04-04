@@ -33,7 +33,7 @@ export const createMetadata = (
 
 export const createNewFinding = (sender: string, addrRecord: UserSwapData, adScore: number): Finding =>
   Finding.fromObject({
-    name: "Unusual Native Swaps Forta Detection Bot",
+    name: "Unusual Native Swaps",
     description: `Unusual native swap behavior by ${sender} has been detected`,
     alertId: "UNUSUAL-NATIVE-SWAPS",
     severity: FindingSeverity.Medium,
