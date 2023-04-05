@@ -20,7 +20,7 @@ export const createMetadata = (
   );
   return {
     attackerAddress: sender,
-    totalEthReceived: ethers.utils.formatEther(addrRecord.totalEthReceived.toString()),
+    totalEthReceived: ethers.utils.formatEther(addrRecord.totalEthReceived.toFixed()),
     totalSwapCount: totalSwapCount.toString(),
     swapStartBlock: addrRecord.tokenSwapData[0].blockNumber.toString(),
     swapStartBlockTimestamp: addrRecord.tokenSwapData[0].blockTimestamp.toString(),
