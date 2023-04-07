@@ -14,7 +14,7 @@ const toCs = (address: string) => ethers.utils.getAddress(address);
 
 const addTxToQueue = (txEvent: TransactionEvent, blockDelay: number): TransactionEvent | undefined => {
   txQueue.push(txEvent);
-  if (numOfBlocks > blockDelay) return txQueue.shift();
+  if (numOfBlocks >= blockDelay) return txQueue.shift();
   const {blockNumber} = txEvent;
   if (blockNumber !== currentBlockNum){
     numOfBlocks++;
