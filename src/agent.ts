@@ -1,8 +1,8 @@
 import { Finding, HandleTransaction, TransactionEvent, getEthersProvider, ethers } from "forta-agent";
-import { createOrUpdateData, toBn, toCs, deleteRedundantData } from "./utils";
+import { createOrUpdateData, toBn, toCs, deleteRedundantData, addTxToQueue } from "./utils";
 import { AddressRecord } from "./swap";
 import { createNewFinding } from "./finding";
-import { MINIMUM_SWAP_COUNT, ERC20_TRANSFER_EVENT, LOW_NONCE_THRESHOLD } from "./constants";
+import { MINIMUM_SWAP_COUNT, ERC20_TRANSFER_EVENT, LOW_NONCE_THRESHOLD, BLOCK_DELAY } from "./constants";
 import NetworkManager from "./network";
 
 const networkManager = new NetworkManager();
@@ -19,9 +19,13 @@ export const provideBotHandler = (
   provider: ethers.providers.JsonRpcProvider,
   lowTxCount: number,
   swapCountThreshold: number,
-  network: NetworkManager
+  network: NetworkManager,
+  blockDelay: number
 ): HandleTransaction => async (txEvent: TransactionEvent): Promise<Finding[]> => {
   const findings: Finding[] = [];
+  let txEventOrUndefined = addTxToQueue(txEvent, blockDelay);
+  if (!txEventOrUndefined) return findings;
+  txEvent = txEventOrUndefined;
   const { from, hash, timestamp, blockNumber } = txEvent;
   // remove redundant data from the AddressRecord Map and get latest price from chainlink oracle every 10000 blocks
   if (blockNumber % 10000 === 0) {
@@ -72,6 +76,7 @@ export default {
     getEthersProvider(),
     LOW_NONCE_THRESHOLD,
     MINIMUM_SWAP_COUNT,
-    networkManager
+    networkManager,
+    BLOCK_DELAY
   ),
 };

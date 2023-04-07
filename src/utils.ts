@@ -1,13 +1,26 @@
 import BigNumber from "bignumber.js";
-import { LogDescription, ethers } from "forta-agent";
+import { LogDescription, ethers, TransactionEvent } from "forta-agent";
 import { AddressRecord, Erc20TransferData, TxSwapData, UserSwapData } from "./swap";
 import { BigNumberish } from "ethers";
 import { MAX_MINUTES_BETWEEN_SWAPS } from "./constants";
 BigNumber.set({ DECIMAL_PLACES: 18 });
 const MAX_TIMESTAMP = MAX_MINUTES_BETWEEN_SWAPS * 60; // maximum time between concurrent swaps.
+const txQueue: TransactionEvent[] = [];
+let currentBlockNum = 0;
+let numOfBlocks = 0;
 
 const toBn = (ethersBn: BigNumberish) => new BigNumber(ethersBn.toString());
 const toCs = (address: string) => ethers.utils.getAddress(address);
+
+const addTxToQueue = (txEvent: TransactionEvent, blockDelay: number): TransactionEvent | undefined => {
+  txQueue.push(txEvent);
+  if (numOfBlocks > blockDelay) return txQueue.shift();
+  const {blockNumber} = txEvent;
+  if (blockNumber !== currentBlockNum){
+    numOfBlocks++;
+    currentBlockNum = blockNumber;
+  };
+};
 
 const createOrUpdateData = (
   txEthReceived: BigNumber,
@@ -62,4 +75,4 @@ const deleteRedundantData = (timestamp: number) => {
   }
 };
 
-export { createOrUpdateData, toBn, deleteRedundantData, toCs };
+export { createOrUpdateData, toBn, deleteRedundantData, toCs, addTxToQueue };
