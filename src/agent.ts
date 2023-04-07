@@ -41,7 +41,7 @@ export const provideBotHandler = (
     .filter((log => {
       for(let transferEvent of erc20TransferEvents){
         if (transferEvent.args.to === ethers.constants.AddressZero && log.address === transferEvent.address
-           && log.args.to === transferEvent.args.from && log.args.value === transferEvent.args.value)
+           && log.args.to === transferEvent.args.from && log.args.value.eq(transferEvent.args.value))
            return false;
       };
       return true;
