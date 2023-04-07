@@ -519,7 +519,7 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .setTimestamp(19182700)
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
 
-        const txEvent4 = new TestTransactionEvent()
+      const txEvent4 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995495)
         .setTimestamp(191827100)
@@ -532,21 +532,19 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .mockResolvedValueOnce(prevBal1)
         .mockResolvedValueOnce(currentBal1)
         .mockResolvedValueOnce(prevBal2)
-        .mockResolvedValueOnce(currentBal2)
+        .mockResolvedValueOnce(currentBal2);
 
-      mockProvider.getTransactionCount
-        .mockResolvedValueOnce(20)
-        .mockResolvedValueOnce(45)
+      mockProvider.getTransactionCount.mockResolvedValueOnce(20).mockResolvedValueOnce(45);
 
-        let blockDelay = 2;
-        handleTransaction = provideBotHandler(
-          MOCK_ERC20_TRANSFER_EVENT,
-          (mockProvider as unknown) as ethers.providers.JsonRpcProvider,
-          MOCK_LOW_TRANSACTION_COUNT_THRESHOLD,
-          MOCK_MINIMUM_SWAP_COUNT - 1,
-          mockNetworkManager,
-          blockDelay
-        );
+      let blockDelay = 2;
+      handleTransaction = provideBotHandler(
+        MOCK_ERC20_TRANSFER_EVENT,
+        (mockProvider as unknown) as ethers.providers.JsonRpcProvider,
+        MOCK_LOW_TRANSACTION_COUNT_THRESHOLD,
+        MOCK_MINIMUM_SWAP_COUNT - 1,
+        mockNetworkManager,
+        blockDelay
+      );
       expect(await handleTransaction(txEvent1)).toStrictEqual([]);
       expect(txQueue).toStrictEqual([txEvent1]);
       expect(numOfBlocks).toStrictEqual(1);
@@ -567,14 +565,15 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       expect(txQueue).toStrictEqual([txEvent2, txEvent3]);
       expect(numOfBlocks).toStrictEqual(2);
       expect(currentBlockNum).toStrictEqual(19995450);
-      const addressRecord = AddressRecord.get(ADDRESSES.attacker)
+      const addressRecord = AddressRecord.get(ADDRESSES.attacker);
       expect(addressRecord?.totalEthReceived).toStrictEqual(toBn(parseEther("15")));
       expect(addressRecord?.tokenSwapData.length).toStrictEqual(1);
       expect(mockProvider.getBalance).toHaveBeenCalledTimes(2);
       expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(1);
 
-      expect(await handleTransaction(txEvent4)).toStrictEqual(
-        [mockCreateNewFinding(ADDRESSES.attacker, addressRecord as UserSwapData)]);
+      expect(await handleTransaction(txEvent4)).toStrictEqual([
+        mockCreateNewFinding(ADDRESSES.attacker, addressRecord as UserSwapData),
+      ]);
       expect(txQueue).toStrictEqual([txEvent3, txEvent4]);
       expect(numOfBlocks).toStrictEqual(2);
       expect(currentBlockNum).toStrictEqual(19995450);
