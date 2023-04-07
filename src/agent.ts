@@ -33,10 +33,19 @@ export const provideBotHandler = (
     await network.getLatestPriceFeed(provider);
   }
   const msgSender = toCs(from);
-  // check the transaction logs for erc20 transfer events where token sender is msg.sender
-  const erc20TransferEventsFromMsgSender = txEvent
-    .filterLog(erc20TransferEvent)
-    .filter(log => log.args.from === msgSender && log.args.to !== ethers.constants.AddressZero);
+  // filter the transaction logs for erc20 transfer events
+  const erc20TransferEvents = txEvent.filterLog(erc20TransferEvent)
+  // get events where token sender is msg.sender and no direct / indirect(liquidity removal)token burn
+  const erc20TransferEventsFromMsgSender = erc20TransferEvents
+    .filter(log => log.args.from === msgSender && log.args.to !== ethers.constants.AddressZero)
+    .filter((log => {
+      for(let transferEvent of erc20TransferEvents){
+        if (transferEvent.args.to === ethers.constants.AddressZero && log.address === transferEvent.address
+           && log.args.to === transferEvent.args.from && log.args.value === transferEvent.args.value)
+           return false;
+      };
+      return true;
+    }));
   if (!erc20TransferEventsFromMsgSender.length) return findings;
   // Compare account balance at previous block to balance at current block to determine if a swap occured
  const [previousBalance, currentBalance, nonce] = await Promise.all([
