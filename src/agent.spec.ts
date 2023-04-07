@@ -3,7 +3,7 @@ import { createChecksumAddress } from "forta-agent-tools/lib/utils";
 import { TestTransactionEvent } from "forta-agent-tools/lib/test";
 import BigNumber from "bignumber.js";
 import { provideBotHandler, totalNativeSwaps } from "./agent";
-import { toBn } from "./utils";
+import { currentBlockNum, numOfBlocks, toBn, txQueue } from "./utils";
 import { createMetadata } from "./finding";
 import { UserSwapData, AddressRecord } from "./swap";
 import { ERC20_TRANSFER_EVENT as MOCK_ERC20_TRANSFER_EVENT } from "./constants";
@@ -16,6 +16,7 @@ const parseEther = (ether: string) => ethers.utils.parseEther(ether);
 const MOCK_MINIMUM_SWAP_COUNT = 3;
 const MOCK_ERC20_APPROVAL_EVENT = "event Approval(address indexed owner, address indexed spender, uint256 value)";
 const MOCK_LOW_TRANSACTION_COUNT_THRESHOLD = 150;
+const TEST_BLOCK_DELAY = 0;
 let mockUnusualNativeSwaps = 0;
 
 const ADDRESSES = {
@@ -77,7 +78,8 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       (mockProvider as unknown) as ethers.providers.JsonRpcProvider,
       MOCK_LOW_TRANSACTION_COUNT_THRESHOLD,
       MOCK_MINIMUM_SWAP_COUNT,
-      mockNetworkManager
+      mockNetworkManager,
+      TEST_BLOCK_DELAY
     );
   });
 
@@ -121,6 +123,38 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
 
       expect(await handleTransaction(txEvent1)).toStrictEqual([]);
       expect(await handleTransaction(txEvent2)).toStrictEqual([]);
+      expect(mockProvider.getBalance).toHaveBeenCalledTimes(0);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
+    });
+
+    it("should return an empty finding when the transfer event is an indirect burn (e.g liquidity removal)", async () => {
+      const addressZero = ethers.constants.AddressZero;
+      const txEvent1 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995400)
+        .setTimestamp(19180075)
+        .setHash("0x12347")
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
+        .addEventLog(...createTransferEvent(ADDRESSES.address2, addressZero, "10000000"));
+
+      const txEvent2 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995450)
+        .setTimestamp(19181800)
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"))
+        .addEventLog(...createTransferEvent(ADDRESSES.address2, addressZero, "30000874"));
+
+      const txEvent3 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995490)
+        .setTimestamp(19182700)
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"))
+        .addEventLog(...createTransferEvent(ADDRESSES.address2, addressZero, "45008764"));
+
+      expect(await handleTransaction(txEvent1)).toStrictEqual([]);
+      expect(await handleTransaction(txEvent2)).toStrictEqual([]);
+      expect(await handleTransaction(txEvent3)).toStrictEqual([]);
+      expect(AddressRecord.has(ADDRESSES.attacker)).toStrictEqual(false);
       expect(mockProvider.getBalance).toHaveBeenCalledTimes(0);
       expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
     });
@@ -463,6 +497,91 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995590);
       expect(addrRecord.totalEthReceived).toStrictEqual(toBn(parseEther("48")));
       expect(addrRecord.tokenSwapData.length).toStrictEqual(4);
+    });
+
+    it("should return finding when the analyzed blocks are greater than the block lag", async () => {
+      const txEvent1 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995400)
+        .setTimestamp(19180075)
+        .setHash("0x12347")
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+
+      const txEvent2 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995450)
+        .setTimestamp(19181800)
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
+
+      const txEvent3 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995490)
+        .setTimestamp(19182700)
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
+
+        const txEvent4 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995495)
+        .setTimestamp(191827100)
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45538700"));
+
+      const [prevBal1, currentBal1] = [parseEther("1"), parseEther("16")];
+      const [prevBal2, currentBal2] = [parseEther("10"), parseEther("30")];
+
+      mockProvider.getBalance
+        .mockResolvedValueOnce(prevBal1)
+        .mockResolvedValueOnce(currentBal1)
+        .mockResolvedValueOnce(prevBal2)
+        .mockResolvedValueOnce(currentBal2)
+
+      mockProvider.getTransactionCount
+        .mockResolvedValueOnce(20)
+        .mockResolvedValueOnce(45)
+
+        let blockDelay = 2;
+        handleTransaction = provideBotHandler(
+          MOCK_ERC20_TRANSFER_EVENT,
+          (mockProvider as unknown) as ethers.providers.JsonRpcProvider,
+          MOCK_LOW_TRANSACTION_COUNT_THRESHOLD,
+          MOCK_MINIMUM_SWAP_COUNT - 1,
+          mockNetworkManager,
+          blockDelay
+        );
+      expect(await handleTransaction(txEvent1)).toStrictEqual([]);
+      expect(txQueue).toStrictEqual([txEvent1]);
+      expect(numOfBlocks).toStrictEqual(1);
+      expect(currentBlockNum).toStrictEqual(19995400);
+      expect(AddressRecord.has(ADDRESSES.attacker)).toStrictEqual(false);
+      expect(mockProvider.getBalance).toHaveBeenCalledTimes(0);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
+
+      expect(await handleTransaction(txEvent2)).toStrictEqual([]);
+      expect(txQueue).toStrictEqual([txEvent1, txEvent2]);
+      expect(numOfBlocks).toStrictEqual(2);
+      expect(currentBlockNum).toStrictEqual(19995450);
+      expect(AddressRecord.has(ADDRESSES.attacker)).toStrictEqual(false);
+      expect(mockProvider.getBalance).toHaveBeenCalledTimes(0);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
+
+      expect(await handleTransaction(txEvent3)).toStrictEqual([]);
+      expect(txQueue).toStrictEqual([txEvent2, txEvent3]);
+      expect(numOfBlocks).toStrictEqual(2);
+      expect(currentBlockNum).toStrictEqual(19995450);
+      const addressRecord = AddressRecord.get(ADDRESSES.attacker)
+      expect(addressRecord?.totalEthReceived).toStrictEqual(toBn(parseEther("15")));
+      expect(addressRecord?.tokenSwapData.length).toStrictEqual(1);
+      expect(mockProvider.getBalance).toHaveBeenCalledTimes(2);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(1);
+
+      expect(await handleTransaction(txEvent4)).toStrictEqual(
+        [mockCreateNewFinding(ADDRESSES.attacker, addressRecord as UserSwapData)]);
+      expect(txQueue).toStrictEqual([txEvent3, txEvent4]);
+      expect(numOfBlocks).toStrictEqual(2);
+      expect(currentBlockNum).toStrictEqual(19995450);
+      expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("35")));
+      expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(2);
+      expect(mockProvider.getBalance).toHaveBeenCalledTimes(4);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(2);
     });
   });
 });
