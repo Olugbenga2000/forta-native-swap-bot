@@ -52,6 +52,9 @@ using decentralized exchanges.
 
   - `MIN_DOLLAR_THRESHOLD`: This refers to the minimum dollar amount that must be received by an address across multiple concurrent native swaps to emit a finding. The default value is 55000 and can be adjusted by setting the `MIN_DOLLAR_THRESHOLD` in `src/constants` file, L4.
 
+  - `BLOCK_DELAY` : The constant is used to add a delay to the bot so it can work in production environment.
+  The default value is 10 and can be adjusted by setting the `BLOCK_DELAY` in `src/constants` file, L10.
+
 ## Test Data
 
 The bot behaviour can be verified with the following transactions:
@@ -61,4 +64,4 @@ npm run tx  [0x799e0960d5051ba6d11eeccb2804cac026b1beffcab61194ad41a8020eec1e36]
 ### RABBY.IO HACK
 npm run tx [0xddffcfd4a7d85d701f9e3485f88b3966bb589507706b76bc293460ba96bc2ef4],[0x20c7d62953253a0c7718322ede8aec763a74176330898e35797914f81f920379]
 
-for alerts to be raised for these test data, the various thresholds should be set to their default values.
+for alerts to be raised for these test data, the `BLOCK_DELAY` should be set to 0 and other thresholds should be set to their default values.
