@@ -84,6 +84,7 @@ export default class NetworkManager implements NetworkData {
         .div(price)
         .toFixed(2);
       this.setNetwork(chainId);
+      console.log("fetched new price from chainlink - ", price.toString())
     } catch (error) {
       console.log("Error while fetching latest data: ", error);
     }

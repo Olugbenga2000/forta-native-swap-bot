@@ -8,6 +8,7 @@ import NetworkManager from "./network";
 const networkManager = new NetworkManager();
 export let totalNativeSwaps = 0;
 let unusualNativeSwaps = 0;
+let prevClearTimestamp = 0
 
 export const initialize = (provider: ethers.providers.Provider) => async () => {
   const { chainId } = await provider.getNetwork();
@@ -28,7 +29,9 @@ export const provideBotHandler = (
   txEvent = txEventOrUndefined;
   const { from, hash, timestamp, blockNumber } = txEvent;
   // remove redundant data from the AddressRecord Map and get latest price from chainlink oracle every 10000 blocks
-  if (blockNumber % 10000 === 0) {
+
+  if (blockNumber % 10000 === 0 && timestamp !== prevClearTimestamp) {
+    prevClearTimestamp = timestamp;
     deleteRedundantData(timestamp);
     await network.getLatestPriceFeed(provider);
   }
