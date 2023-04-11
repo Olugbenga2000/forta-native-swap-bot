@@ -17,12 +17,10 @@ export const initialize = (provider: ethers.providers.Provider) => async () => {
 };
 
 export const provideBotHandler = (
-  erc20TransferEvent: string,
   provider: ethers.providers.JsonRpcProvider,
   lowTxCount: number,
   swapCountThreshold: number,
   network: NetworkManager,
-  wethWithdrawalEvent: string
 ): HandleTransaction => async (txEvent: TransactionEvent): Promise<Finding[]> => {
   const findings: Finding[] = [];
   const { from, hash, timestamp, blockNumber } = txEvent;
@@ -35,7 +33,7 @@ export const provideBotHandler = (
   }
   const msgSender = toCs(from);
   // filter the transaction logs for erc20 transfer events
-  const erc20TransferEvents = txEvent.filterLog(erc20TransferEvent);
+  const erc20TransferEvents = txEvent.filterLog(ERC20_TRANSFER_EVENT,);
   // get events where token sender is msg.sender and no direct / indirect(liquidity removal)token burn
   const erc20TransferEventsFromMsgSender = erc20TransferEvents
     .filter(log => log.args.from === msgSender && log.args.to !== ethers.constants.AddressZero)
@@ -57,12 +55,11 @@ export const provideBotHandler = (
   if (chainId === 42161 || chainId === 250) 
   wethWithdrawals = erc20TransferEvents.filter(log => log.address === network.wNative && log.args.to === ethers.constants.AddressZero)
   else
-  wethWithdrawals = txEvent.filterLog(wethWithdrawalEvent, network.wNative);
+  wethWithdrawals = txEvent.filterLog(WETH_WITHDRAWAL_EVENT, network.wNative);
   if (!wethWithdrawals.length) return findings;
   totalNativeSwaps++;
-  const ethWithdrawn = wethWithdrawals.reduce((acc, log) => toBn(log.args.wad).plus(acc), toBn(0));
-  
 
+  const ethWithdrawn = wethWithdrawals.reduce((acc, log) => toBn(log.args.wad).plus(acc), toBn(0));
   // Check if msg.sender's address is new
   const nonce = await provider.getTransactionCount(msgSender);
   if (nonce > lowTxCount) return findings;
@@ -89,11 +86,9 @@ export const provideBotHandler = (
 export default {
   initialize: initialize(getEthersProvider()),
   handleTransaction: provideBotHandler(
-    ERC20_TRANSFER_EVENT,
     getEthersProvider(),
     LOW_NONCE_THRESHOLD,
     MINIMUM_SWAP_COUNT,
-    networkManager,
-    WETH_WITHDRAWAL_EVENT
+    networkManager
   ),
 };
