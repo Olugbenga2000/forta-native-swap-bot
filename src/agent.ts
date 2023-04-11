@@ -2,7 +2,7 @@ import { Finding, HandleTransaction, TransactionEvent, getEthersProvider, ethers
 import { createOrUpdateData, toBn, toCs, deleteRedundantData} from "./utils";
 import { AddressRecord } from "./swap";
 import { createNewFinding } from "./finding";
-import { MINIMUM_SWAP_COUNT, ERC20_TRANSFER_EVENT, LOW_NONCE_THRESHOLD} from "./constants";
+import { MINIMUM_SWAP_COUNT, ERC20_TRANSFER_EVENT, LOW_NONCE_THRESHOLD, WETH_WITHDRAWAL_EVENT} from "./constants";
 import NetworkManager from "./network";
 
 const networkManager = new NetworkManager();
@@ -21,7 +21,8 @@ export const provideBotHandler = (
   provider: ethers.providers.JsonRpcProvider,
   lowTxCount: number,
   swapCountThreshold: number,
-  network: NetworkManager
+  network: NetworkManager,
+  wethWithdrawalEvent: string
 ): HandleTransaction => async (txEvent: TransactionEvent): Promise<Finding[]> => {
   const findings: Finding[] = [];
   const { from, hash, timestamp, blockNumber } = txEvent;
@@ -53,8 +54,8 @@ export const provideBotHandler = (
   if (!erc20TransferEventsFromMsgSender.length) return findings;
   // Check for withdrawals from the wrapped native token to determine if a native swap occurred
   let wethWithdrawals;
-  if (chainId === 42161) 
-  wethWithdrawals = erc20TransferEvents.filter(log => log.address = network.wNative && log.args.to === ethers.constants.AddressZero)
+  if (chainId === 42161 || chainId === 250) 
+  wethWithdrawals = erc20TransferEvents.filter(log => log.address === network.wNative && log.args.to === ethers.constants.AddressZero)
   else
   wethWithdrawals = txEvent.filterLog(wethWithdrawalEvent, network.wNative);
   if (!wethWithdrawals.length) return findings;
@@ -92,6 +93,7 @@ export default {
     getEthersProvider(),
     LOW_NONCE_THRESHOLD,
     MINIMUM_SWAP_COUNT,
-    networkManager
+    networkManager,
+    WETH_WITHDRAWAL_EVENT
   ),
 };
