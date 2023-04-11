@@ -16,7 +16,6 @@ const parseEther = (ether: string) => ethers.utils.parseEther(ether);
 const MOCK_MINIMUM_SWAP_COUNT = 3;
 const MOCK_ERC20_APPROVAL_EVENT = "event Approval(address indexed owner, address indexed spender, uint256 value)";
 const MOCK_LOW_TRANSACTION_COUNT_THRESHOLD = 150;
-const TEST_BLOCK_DELAY = 0;
 let mockUnusualNativeSwaps = 0;
 
 const ADDRESSES = {
@@ -64,6 +63,7 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
   const mockNetworkManager: NetworkManager = {
     minNativeThreshold: "30",
     nativeUsdAggregator: createChecksumAddress("0x12"),
+    wNative: createChecksumAddress("0xC02"),
     setNetwork: jest.fn(),
     getLatestPriceFeed: jest.fn(),
   };
@@ -74,12 +74,10 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
     mockProvider.getBalance.mockReset();
     AddressRecord.clear();
     handleTransaction = provideBotHandler(
-      MOCK_ERC20_TRANSFER_EVENT,
       (mockProvider as unknown) as ethers.providers.JsonRpcProvider,
       MOCK_LOW_TRANSACTION_COUNT_THRESHOLD,
       MOCK_MINIMUM_SWAP_COUNT,
-      mockNetworkManager,
-      TEST_BLOCK_DELAY
+      mockNetworkManager
     );
   });
 
@@ -538,12 +536,10 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
 
       let blockDelay = 2;
       handleTransaction = provideBotHandler(
-        MOCK_ERC20_TRANSFER_EVENT,
         (mockProvider as unknown) as ethers.providers.JsonRpcProvider,
         MOCK_LOW_TRANSACTION_COUNT_THRESHOLD,
         MOCK_MINIMUM_SWAP_COUNT - 1,
         mockNetworkManager,
-        blockDelay
       );
       expect(await handleTransaction(txEvent1)).toStrictEqual([]);
       expect(txQueue).toStrictEqual([txEvent1]);
