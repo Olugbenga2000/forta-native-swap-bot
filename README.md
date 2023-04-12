@@ -52,9 +52,6 @@ using decentralized exchanges.
 
   - `MIN_DOLLAR_THRESHOLD`: This refers to the minimum dollar amount that must be received by an address across multiple concurrent native swaps to emit a finding. The default value is 55000 and can be adjusted by setting the `MIN_DOLLAR_THRESHOLD` in `src/constants` file, L4.
 
-  - `BLOCK_DELAY` : The constant is used to add a delay to the bot so it can work in production environment.
-  The default value is 10 and can be adjusted by setting the `BLOCK_DELAY` in `src/constants` file, L10.
-
 ## Test Data
 
 The bot behaviour can be verified with the following transactions:
