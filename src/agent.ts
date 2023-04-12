@@ -55,7 +55,7 @@ export const provideBotHandler = (
   let wethWithdrawals: LogDescription[], ethWithdrawn: BigNumber;
   if (chainId === 42161 || chainId === 250) {
     wethWithdrawals = erc20TransferEvents.filter(
-      log => log.address === network.wNative && log.args.to === ethers.constants.AddressZero
+      log => toCs(log.address) === network.wNative && log.args.to === ethers.constants.AddressZero
     );
     ethWithdrawn = wethWithdrawals.reduce((acc, log) => toBn(log.args.value).plus(acc), toBn(0));
   } else {
