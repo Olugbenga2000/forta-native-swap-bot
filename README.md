@@ -32,7 +32,7 @@ using decentralized exchanges.
     - `swapStartBlockTimestamp`: the block timestamp of the first swap by the attacker.
     - `swapEndBlock`: the block number of the last swap by the attacker.
     - `swapEndBlockTimestamp`: the block timestamp of the last swap by the attacker.
-    - `swapTokensAddressesAndAmounts`: the tokens addresses and amounts swapped by the attacker
+    - `swapTokensAddressesAndAmounts`: the tokens addresses, amounts and tx hash swapped by the attacker
        (only swaps from which the finding was generated)
     - `anomalyScore`: calculated by the number of native swaps resulting in a finding divided by the total
        number of native swaps
