@@ -2,11 +2,11 @@ import { FindingType, FindingSeverity, Finding, HandleTransaction, ethers, Entit
 import { createChecksumAddress } from "forta-agent-tools/lib/utils";
 import { TestTransactionEvent } from "forta-agent-tools/lib/test";
 import BigNumber from "bignumber.js";
-import { provideBotHandler, totalNativeSwaps } from "./agent";
-import { currentBlockNum, numOfBlocks, toBn, txQueue } from "./utils";
+import { provideBotHandler, totalNativeSwaps, provideInitialize } from "./agent";
+import {toBn} from "./utils";
 import { createMetadata } from "./finding";
 import { UserSwapData, AddressRecord } from "./swap";
-import { ERC20_TRANSFER_EVENT as MOCK_ERC20_TRANSFER_EVENT } from "./constants";
+import { ERC20_TRANSFER_EVENT as MOCK_ERC20_TRANSFER_EVENT, WETH_WITHDRAWAL_EVENT } from "./constants";
 import NetworkManager from "./network";
 BigNumber.set({ DECIMAL_PLACES: 18 });
 
@@ -16,6 +16,7 @@ const parseEther = (ether: string) => ethers.utils.parseEther(ether);
 const MOCK_MINIMUM_SWAP_COUNT = 3;
 const MOCK_ERC20_APPROVAL_EVENT = "event Approval(address indexed owner, address indexed spender, uint256 value)";
 const MOCK_LOW_TRANSACTION_COUNT_THRESHOLD = 150;
+const MOCK_WETH_ADDRESS = createChecksumAddress("0xC02");
 let mockUnusualNativeSwaps = 0;
 
 const ADDRESSES = {
@@ -23,6 +24,8 @@ const ADDRESSES = {
   address2: createChecksumAddress("0x9C17"),
   attacker: createChecksumAddress("0xb8652"),
   contractAddr: createChecksumAddress("0x3852A"),
+  router1: createChecksumAddress("0x72A"),
+  router2: createChecksumAddress("0x0A4")
 };
 
 const mockCreateNewFinding = (sender: string, addrRecord: UserSwapData): Finding => {
@@ -48,31 +51,45 @@ const mockCreateNewFinding = (sender: string, addrRecord: UserSwapData): Finding
   });
 };
 
-const MOCK_ERC20_IFACE = new ethers.utils.Interface([MOCK_ERC20_TRANSFER_EVENT, MOCK_ERC20_APPROVAL_EVENT]);
-const createTransferEvent = (from: string, to: string, value: string): [ethers.utils.EventFragment, string, any[]] => [
+const MOCK_ERC20_IFACE = new ethers.utils.Interface([
+  MOCK_ERC20_TRANSFER_EVENT, 
+  MOCK_ERC20_APPROVAL_EVENT, 
+  WETH_WITHDRAWAL_EVENT
+]);
+
+const createTransferEvent = (from: string, to: string, value: string, contractAddr = ADDRESSES.contractAddr): 
+[ethers.utils.EventFragment, string, any[]] => [
   MOCK_ERC20_IFACE.getEvent("Transfer"),
-  ADDRESSES.contractAddr,
+  contractAddr,
   [from, to, value],
 ];
+
+const createWithdrawalEvent = (src: string, wad: ethers.BigNumber): [ethers.utils.EventFragment, string, any[]] => [
+  MOCK_ERC20_IFACE.getEvent("Withdrawal"),
+  MOCK_WETH_ADDRESS,
+  [src, wad]
+]
 
 describe("Unusual Native Swaps Bot Test Suite", () => {
   const mockProvider = {
     getTransactionCount: jest.fn(),
-    getBalance: jest.fn(),
+    getNetwork: jest.fn()
   };
   const mockNetworkManager: NetworkManager = {
     minNativeThreshold: "30",
     nativeUsdAggregator: createChecksumAddress("0x12"),
-    wNative: createChecksumAddress("0xC02"),
+    wNative: MOCK_WETH_ADDRESS,
     setNetwork: jest.fn(),
     getLatestPriceFeed: jest.fn(),
   };
   let handleTransaction: HandleTransaction;
+  let initialize:() => Promise<void>;
 
-  beforeEach(() => {
+  beforeEach(async() => {
     mockProvider.getTransactionCount.mockReset();
-    mockProvider.getBalance.mockReset();
+    mockProvider.getNetwork.mockReset();
     AddressRecord.clear();
+    initialize = provideInitialize(mockProvider as unknown as ethers.providers.Provider);
     handleTransaction = provideBotHandler(
       (mockProvider as unknown) as ethers.providers.JsonRpcProvider,
       MOCK_LOW_TRANSACTION_COUNT_THRESHOLD,
@@ -85,7 +102,7 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
     it("should return an empty finding when there's no event in the transaction log", async () => {
       const txEvent = new TestTransactionEvent().setFrom(ADDRESSES.address1);
       expect(await handleTransaction(txEvent)).toStrictEqual([]);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(0);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
     });
 
     it("should return an empty finding when there are other events apart from transfer event in the tx log", async () => {
@@ -98,7 +115,7 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         ]);
 
       expect(await handleTransaction(txEvent)).toStrictEqual([]);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(0);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
     });
 
     it("should return an empty finding when there's a transfer event where the msgSender is not equal to token sender", async () => {
@@ -107,7 +124,7 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .addEventLog(...createTransferEvent(ADDRESSES.address1, ADDRESSES.address2, "10000000"));
 
       expect(await handleTransaction(txEvent)).toStrictEqual([]);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(0);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
     });
 
     it("should return an empty finding when the transfer event is to address(0)", async () => {
@@ -121,7 +138,6 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
 
       expect(await handleTransaction(txEvent1)).toStrictEqual([]);
       expect(await handleTransaction(txEvent2)).toStrictEqual([]);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(0);
       expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
     });
 
@@ -153,7 +169,6 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       expect(await handleTransaction(txEvent2)).toStrictEqual([]);
       expect(await handleTransaction(txEvent3)).toStrictEqual([]);
       expect(AddressRecord.has(ADDRESSES.attacker)).toStrictEqual(false);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(0);
       expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
     });
 
@@ -161,25 +176,20 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       const txEvent = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
-      const prevBal = parseEther("0.01");
-      mockProvider.getBalance.mockResolvedValueOnce(prevBal).mockResolvedValueOnce(prevBal.sub("100098"));
       expect(await handleTransaction(txEvent)).toStrictEqual([]);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(2);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(1);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
     });
 
     it("should return an empty finding when the msgSender isn't a new address (has high nonce)", async () => {
       const txEvent = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995400)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
-      const prevBal = parseEther("7");
-      mockProvider.getBalance.mockResolvedValueOnce(prevBal).mockResolvedValueOnce(prevBal.add("100098"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("7")));
       mockProvider.getTransactionCount.mockResolvedValueOnce(175);
       expect(await handleTransaction(txEvent)).toStrictEqual([]);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(2);
       expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(1);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker);
       expect(AddressRecord.has(ADDRESSES.attacker)).toStrictEqual(false);
     });
 
@@ -188,27 +198,22 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995400)
         .setTimestamp(19180075)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
-      const [prevBal1, currentBal1] = [parseEther("1"), parseEther("18")];
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("17")));
+
       const txEvent2 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995450)
         .setTimestamp(19181800)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router2, parseEther("15")));
 
-      mockProvider.getBalance
-        .mockResolvedValueOnce(prevBal1)
-        .mockResolvedValueOnce(currentBal1)
-        .mockResolvedValueOnce(currentBal1)
-        .mockResolvedValueOnce(currentBal1.add(parseEther("15")));
       mockProvider.getTransactionCount.mockResolvedValueOnce(75).mockResolvedValueOnce(101);
 
       expect(await handleTransaction(txEvent1)).toStrictEqual([]);
       expect(await handleTransaction(txEvent2)).toStrictEqual([]);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(4);
       expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(2);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker);
       expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("32")));
       expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(2);
     });
@@ -218,30 +223,23 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995400)
         .setTimestamp(19180075)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("17")));
 
       const txEvent2 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995450)
         .setTimestamp(19181800)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("15")));
 
       const txEvent3 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995480)
         .setTimestamp(19183700) // timestamp interval more than MAX_TIMESTAMP
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router2, parseEther("25")));
 
-      const [prevBal1, currentBal1] = [parseEther("1"), parseEther("18")];
-      const [prevBal2, currentBal2] = [parseEther("20"), parseEther("35")];
-      const [prevBal3, currentBal3] = [parseEther("23"), parseEther("48")];
-      mockProvider.getBalance
-        .mockResolvedValueOnce(prevBal1)
-        .mockResolvedValueOnce(currentBal1)
-        .mockResolvedValueOnce(prevBal2)
-        .mockResolvedValueOnce(currentBal2)
-        .mockResolvedValueOnce(prevBal3)
-        .mockResolvedValueOnce(currentBal3);
       mockProvider.getTransactionCount
         .mockResolvedValueOnce(75)
         .mockResolvedValueOnce(101)
@@ -252,46 +250,33 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("32")));
       expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(2);
       expect(await handleTransaction(txEvent3)).toStrictEqual([]);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(6);
       expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(3);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995480);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker);
       expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("25")));
       expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(1);
     });
 
-    it("should return an empty finding when total eth received is lesser than Min eth threshold ", async () => {
+    it("should return empty findings when total eth received is lesser than Min eth threshold ", async () => {
       const txEvent1 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995400)
         .setTimestamp(19180075)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("10")));
 
       const txEvent2 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995450)
         .setTimestamp(19181800)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router2, parseEther("11")));
 
       const txEvent3 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995490)
         .setTimestamp(19182700)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
-
-      // total eth received from the 3 txs is lesser than the minimum eth required for a finding
-      const [prevBal1, currentBal1] = [parseEther("1"), parseEther("11")];
-      const [prevBal2, currentBal2] = [parseEther("20"), parseEther("31")];
-      const [prevBal3, currentBal3] = [parseEther("23"), parseEther("28")];
-
-      mockProvider.getBalance
-        .mockResolvedValueOnce(prevBal1)
-        .mockResolvedValueOnce(currentBal1)
-        .mockResolvedValueOnce(prevBal2)
-        .mockResolvedValueOnce(currentBal2)
-        .mockResolvedValueOnce(prevBal3)
-        .mockResolvedValueOnce(currentBal3);
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("5")));
       mockProvider.getTransactionCount
         .mockResolvedValueOnce(75)
         .mockResolvedValueOnce(101)
@@ -300,13 +285,80 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       expect(await handleTransaction(txEvent1)).toStrictEqual([]);
       expect(await handleTransaction(txEvent2)).toStrictEqual([]);
       expect(await handleTransaction(txEvent3)).toStrictEqual([]);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(6);
       expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(3);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995490);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker);
       expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("26")));
       expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(3);
+    });
+
+    it("should return empty findings for other chains when there are fantom/arbitrum native withdrawal", async () => {
+      const txEvent1 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995400)
+        .setTimestamp(19180075)
+        .setHash("0x12347")
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
+        .addEventLog(...createTransferEvent(ADDRESSES.router1, ethers.constants.AddressZero, 
+          parseEther("15").toString(), MOCK_WETH_ADDRESS));
+
+      const txEvent2 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995450)
+        .setTimestamp(19181800)
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"))
+        .addEventLog(...createTransferEvent(ADDRESSES.router2, ethers.constants.AddressZero, 
+          parseEther("20").toString(), MOCK_WETH_ADDRESS))
+
+      const txEvent3 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995490)
+        .setTimestamp(19182700)
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"))
+        .addEventLog(...createTransferEvent(ADDRESSES.router1, ethers.constants.AddressZero, 
+          parseEther("5").toString(), MOCK_WETH_ADDRESS));
+      mockProvider.getNetwork.mockResolvedValueOnce({chainId: 1});  // Mainnet chain id
+      await initialize();
+      expect(await handleTransaction(txEvent1)).toStrictEqual([]);
+      expect(await handleTransaction(txEvent2)).toStrictEqual([]);
+      expect(await handleTransaction(txEvent3)).toStrictEqual([]);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
+      expect(mockProvider.getNetwork).toHaveBeenCalledTimes(1);
+      expect(AddressRecord.has(ADDRESSES.attacker)).toStrictEqual(false);
+    });
+
+    it("should return empty findings for fantom/arbitrum when there are other chains native withdrawal", async () => {
+      const txEvent1 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995400)
+        .setTimestamp(19180075)
+        .setHash("0x12347")
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("20")));
+
+
+      const txEvent2 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995450)
+        .setTimestamp(19181800)
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("25")));
+
+
+      const txEvent3 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995490)
+        .setTimestamp(19182700)
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("10")));
+
+      mockProvider.getNetwork.mockResolvedValueOnce({chainId: 250});  // Fantom chain id
+      await initialize();
+      expect(await handleTransaction(txEvent1)).toStrictEqual([]);
+      expect(await handleTransaction(txEvent2)).toStrictEqual([]);
+      expect(await handleTransaction(txEvent3)).toStrictEqual([]);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
+      expect(mockProvider.getNetwork).toHaveBeenCalledTimes(1);
+      expect(AddressRecord.has(ADDRESSES.attacker)).toStrictEqual(false);
     });
 
     it("should clear redudant data at every 10000th block", async () => {
@@ -314,45 +366,36 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19989790)
         .setTimestamp(19185075)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("10")));
 
       const txEvent2 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.address2))
         .setBlock(19989870)
         .setTimestamp(19186500)
-        .addEventLog(...createTransferEvent(ADDRESSES.address2, ADDRESSES.address1, "30000874"));
+        .addEventLog(...createTransferEvent(ADDRESSES.address2, ADDRESSES.address1, "30000874"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router2, parseEther("5.5")));
 
       const txEvent3 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.contractAddr))
         .setBlock(19989950)
         .setTimestamp(19189050)
-        .addEventLog(...createTransferEvent(ADDRESSES.contractAddr, ADDRESSES.address2, "45008764"));
+        .addEventLog(...createTransferEvent(ADDRESSES.contractAddr, ADDRESSES.address2, "45008764"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router2, parseEther("3")));
 
       const txEvent4 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.address1))
         .setBlock(19990000)
         .setTimestamp(19190100)
-        .addEventLog(...createTransferEvent(ADDRESSES.address1, ADDRESSES.address2, "45008764"));
-
-      const [prevBal1, currentBal1] = [parseEther("1"), parseEther("11")];
-      const [prevBal2, currentBal2] = [parseEther("10"), parseEther("15.5")];
-      const [prevBal3, currentBal3] = [parseEther("5"), parseEther("8")];
-      const [prevBal4, currentBal4] = [parseEther("2"), parseEther("12.8")];
-
-      mockProvider.getBalance
-        .mockResolvedValueOnce(prevBal1)
-        .mockResolvedValueOnce(currentBal1)
-        .mockResolvedValueOnce(prevBal2)
-        .mockResolvedValueOnce(currentBal2)
-        .mockResolvedValueOnce(prevBal3)
-        .mockResolvedValueOnce(currentBal3)
-        .mockResolvedValueOnce(prevBal4)
-        .mockResolvedValueOnce(currentBal4);
+        .addEventLog(...createTransferEvent(ADDRESSES.address1, ADDRESSES.address2, "45008764"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("10.8")));
       mockProvider.getTransactionCount
         .mockResolvedValueOnce(75)
         .mockResolvedValueOnce(101)
         .mockResolvedValueOnce(125)
         .mockResolvedValueOnce(148);
+      mockProvider.getNetwork.mockResolvedValueOnce({chainId: 1});  // Mainnet chain id
+      await initialize();
 
       expect(await handleTransaction(txEvent1)).toStrictEqual([]);
       expect(await handleTransaction(txEvent2)).toStrictEqual([]);
@@ -372,12 +415,11 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       expect(AddressRecord.get(ADDRESSES.contractAddr)?.tokenSwapData.length).toStrictEqual(1);
       expect(AddressRecord.get(ADDRESSES.address1)?.totalEthReceived).toStrictEqual(toBn(parseEther("10.8")));
       expect(AddressRecord.get(ADDRESSES.address1)?.tokenSwapData.length).toStrictEqual(1);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(8);
       expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(4);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19989790);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.address2, 19989870);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.contractAddr, 19989950);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.address1, 19990000);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.address2);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.contractAddr);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.address1);
     });
   });
 
@@ -388,31 +430,26 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .setBlock(19995400)
         .setTimestamp(19180075)
         .setHash("0x12347")
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("15")));
 
       const txEvent2 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995450)
         .setTimestamp(19181800)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router2, parseEther("10")));
 
       const txEvent3 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995490)
         .setTimestamp(19182700)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("5")));
 
       const [prevBal1, currentBal1] = [parseEther("1"), parseEther("16")];
       const [prevBal2, currentBal2] = [parseEther("10"), parseEther("20")];
       const [prevBal3, currentBal3] = [parseEther("5"), parseEther("10")];
-
-      mockProvider.getBalance
-        .mockResolvedValueOnce(prevBal1)
-        .mockResolvedValueOnce(currentBal1)
-        .mockResolvedValueOnce(prevBal2)
-        .mockResolvedValueOnce(currentBal2)
-        .mockResolvedValueOnce(prevBal3)
-        .mockResolvedValueOnce(currentBal3);
 
       mockProvider.getTransactionCount
         .mockResolvedValueOnce(20)
@@ -424,11 +461,8 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       const finding = await handleTransaction(txEvent3);
       const addrRecord = AddressRecord.get(ADDRESSES.attacker) as UserSwapData;
       expect(finding).toStrictEqual([mockCreateNewFinding(ADDRESSES.attacker, addrRecord)]);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(6);
       expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(3);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995490);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker);
       expect(addrRecord.totalEthReceived).toStrictEqual(toBn(parseEther("30")));
       expect(addrRecord.tokenSwapData.length).toStrictEqual(3);
     });
@@ -439,40 +473,29 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .setBlock(19995400)
         .setTimestamp(19180075)
         .setHash("0x12347")
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("15")));
 
       const txEvent2 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995450)
         .setTimestamp(19181800)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("20")));
 
       const txEvent3 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995490)
         .setTimestamp(19182700)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router2, parseEther("5")));
 
       const txEvent4 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995590)
         .setTimestamp(19183100)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "9878764"));
-
-      const [prevBal1, currentBal1] = [parseEther("1"), parseEther("16")];
-      const [prevBal2, currentBal2] = [parseEther("10"), parseEther("30")];
-      const [prevBal3, currentBal3] = [parseEther("29"), parseEther("34")];
-      const [prevBal4, currentBal4] = [parseEther("34"), parseEther("42")];
-
-      mockProvider.getBalance
-        .mockResolvedValueOnce(prevBal1)
-        .mockResolvedValueOnce(currentBal1)
-        .mockResolvedValueOnce(prevBal2)
-        .mockResolvedValueOnce(currentBal2)
-        .mockResolvedValueOnce(prevBal3)
-        .mockResolvedValueOnce(currentBal3)
-        .mockResolvedValueOnce(prevBal4)
-        .mockResolvedValueOnce(currentBal4);
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "9878764"))
+        .addEventLog(...createWithdrawalEvent(ADDRESSES.router2, parseEther("8")));
       mockProvider.getTransactionCount
         .mockResolvedValueOnce(20)
         .mockResolvedValueOnce(45)
@@ -487,96 +510,122 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
       finding = await handleTransaction(txEvent4);
       addrRecord = AddressRecord.get(ADDRESSES.attacker) as UserSwapData;
       expect(finding).toStrictEqual([mockCreateNewFinding(ADDRESSES.attacker, addrRecord)]);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(8);
       expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(4);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995400);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995450);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995490);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker, 19995590);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker);
       expect(addrRecord.totalEthReceived).toStrictEqual(toBn(parseEther("48")));
       expect(addrRecord.tokenSwapData.length).toStrictEqual(4);
     });
 
-    it("should return finding when the analyzed blocks are greater than the block lag", async () => {
+    it("should return correct findings for Arbitrum chain", async () => {
       const txEvent1 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995400)
         .setTimestamp(19180075)
         .setHash("0x12347")
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
+        .addEventLog(...createTransferEvent(ADDRESSES.router1, ethers.constants.AddressZero, 
+          parseEther("15").toString(), MOCK_WETH_ADDRESS));
 
       const txEvent2 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995450)
         .setTimestamp(19181800)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"))
+        .addEventLog(...createTransferEvent(ADDRESSES.router2, ethers.constants.AddressZero, 
+          parseEther("20").toString(), MOCK_WETH_ADDRESS))
 
       const txEvent3 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995490)
         .setTimestamp(19182700)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"));
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"))
+        .addEventLog(...createTransferEvent(ADDRESSES.router1, ethers.constants.AddressZero, 
+          parseEther("5").toString(), MOCK_WETH_ADDRESS))
 
       const txEvent4 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
-        .setBlock(19995495)
-        .setTimestamp(191827100)
-        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45538700"));
-
-      const [prevBal1, currentBal1] = [parseEther("1"), parseEther("16")];
-      const [prevBal2, currentBal2] = [parseEther("10"), parseEther("30")];
-
-      mockProvider.getBalance
-        .mockResolvedValueOnce(prevBal1)
-        .mockResolvedValueOnce(currentBal1)
-        .mockResolvedValueOnce(prevBal2)
-        .mockResolvedValueOnce(currentBal2);
-
-      mockProvider.getTransactionCount.mockResolvedValueOnce(20).mockResolvedValueOnce(45);
-
-      let blockDelay = 2;
-      handleTransaction = provideBotHandler(
-        (mockProvider as unknown) as ethers.providers.JsonRpcProvider,
-        MOCK_LOW_TRANSACTION_COUNT_THRESHOLD,
-        MOCK_MINIMUM_SWAP_COUNT - 1,
-        mockNetworkManager,
-      );
+        .setBlock(19995590)
+        .setTimestamp(19183100)
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "9878764"))
+        .addEventLog(...createTransferEvent(ADDRESSES.router2, ethers.constants.AddressZero, 
+          parseEther("8").toString(), MOCK_WETH_ADDRESS))
+      mockProvider.getTransactionCount
+        .mockResolvedValueOnce(20)
+        .mockResolvedValueOnce(45)
+        .mockResolvedValueOnce(67)
+        .mockResolvedValueOnce(120);
+      mockProvider.getNetwork.mockResolvedValueOnce({chainId: 42161})   // Arbitrum chain id
+      const initialize = provideInitialize(mockProvider as unknown as ethers.providers.Provider);
+      await initialize();
       expect(await handleTransaction(txEvent1)).toStrictEqual([]);
-      expect(txQueue).toStrictEqual([txEvent1]);
-      expect(numOfBlocks).toStrictEqual(1);
-      expect(currentBlockNum).toStrictEqual(19995400);
-      expect(AddressRecord.has(ADDRESSES.attacker)).toStrictEqual(false);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(0);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
-
       expect(await handleTransaction(txEvent2)).toStrictEqual([]);
-      expect(txQueue).toStrictEqual([txEvent1, txEvent2]);
-      expect(numOfBlocks).toStrictEqual(2);
-      expect(currentBlockNum).toStrictEqual(19995450);
-      expect(AddressRecord.has(ADDRESSES.attacker)).toStrictEqual(false);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(0);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(0);
+      let finding = await handleTransaction(txEvent3);
+      let addrRecord = AddressRecord.get(ADDRESSES.attacker) as UserSwapData;
+      expect(finding).toStrictEqual([mockCreateNewFinding(ADDRESSES.attacker, addrRecord)]);
+      finding = await handleTransaction(txEvent4);
+      addrRecord = AddressRecord.get(ADDRESSES.attacker) as UserSwapData;
+      expect(finding).toStrictEqual([mockCreateNewFinding(ADDRESSES.attacker, addrRecord)]);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(4);
+      expect(mockProvider.getNetwork).toHaveBeenCalledTimes(1);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker);
+      expect(addrRecord.totalEthReceived).toStrictEqual(toBn(parseEther("48")));
+      expect(addrRecord.tokenSwapData.length).toStrictEqual(4);
+    });
 
-      expect(await handleTransaction(txEvent3)).toStrictEqual([]);
-      expect(txQueue).toStrictEqual([txEvent2, txEvent3]);
-      expect(numOfBlocks).toStrictEqual(2);
-      expect(currentBlockNum).toStrictEqual(19995450);
-      const addressRecord = AddressRecord.get(ADDRESSES.attacker);
-      expect(addressRecord?.totalEthReceived).toStrictEqual(toBn(parseEther("15")));
-      expect(addressRecord?.tokenSwapData.length).toStrictEqual(1);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(2);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(1);
+    it("should return correct findings for Fantom chain", async () => {
+      const txEvent1 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995400)
+        .setTimestamp(19180075)
+        .setHash("0x12347")
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
+        .addEventLog(...createTransferEvent(ADDRESSES.router1, ethers.constants.AddressZero, 
+          parseEther("15").toString(), MOCK_WETH_ADDRESS));
 
-      expect(await handleTransaction(txEvent4)).toStrictEqual([
-        mockCreateNewFinding(ADDRESSES.attacker, addressRecord as UserSwapData),
-      ]);
-      expect(txQueue).toStrictEqual([txEvent3, txEvent4]);
-      expect(numOfBlocks).toStrictEqual(2);
-      expect(currentBlockNum).toStrictEqual(19995450);
-      expect(AddressRecord.get(ADDRESSES.attacker)?.totalEthReceived).toStrictEqual(toBn(parseEther("35")));
-      expect(AddressRecord.get(ADDRESSES.attacker)?.tokenSwapData.length).toStrictEqual(2);
-      expect(mockProvider.getBalance).toHaveBeenCalledTimes(4);
-      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(2);
+      const txEvent2 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995450)
+        .setTimestamp(19181800)
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"))
+        .addEventLog(...createTransferEvent(ADDRESSES.router2, ethers.constants.AddressZero, 
+          parseEther("20").toString(), MOCK_WETH_ADDRESS))
+
+      const txEvent3 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995490)
+        .setTimestamp(19182700)
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"))
+        .addEventLog(...createTransferEvent(ADDRESSES.router1, ethers.constants.AddressZero, 
+          parseEther("5").toString(), MOCK_WETH_ADDRESS))
+
+      const txEvent4 = new TestTransactionEvent()
+        .setFrom(lowerC(ADDRESSES.attacker))
+        .setBlock(19995590)
+        .setTimestamp(19183100)
+        .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "9878764"))
+        .addEventLog(...createTransferEvent(ADDRESSES.router2, ethers.constants.AddressZero, 
+          parseEther("8").toString(), MOCK_WETH_ADDRESS))
+      mockProvider.getTransactionCount
+        .mockResolvedValueOnce(20)
+        .mockResolvedValueOnce(45)
+        .mockResolvedValueOnce(67)
+        .mockResolvedValueOnce(120);
+      mockProvider.getNetwork.mockResolvedValueOnce({chainId: 250})   // Arbitrum chain id
+      const initialize = provideInitialize(mockProvider as unknown as ethers.providers.Provider);
+      await initialize();
+      expect(await handleTransaction(txEvent1)).toStrictEqual([]);
+      expect(await handleTransaction(txEvent2)).toStrictEqual([]);
+      let finding = await handleTransaction(txEvent3);
+      let addrRecord = AddressRecord.get(ADDRESSES.attacker) as UserSwapData;
+      expect(finding).toStrictEqual([mockCreateNewFinding(ADDRESSES.attacker, addrRecord)]);
+      finding = await handleTransaction(txEvent4);
+      addrRecord = AddressRecord.get(ADDRESSES.attacker) as UserSwapData;
+      expect(finding).toStrictEqual([mockCreateNewFinding(ADDRESSES.attacker, addrRecord)]);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledTimes(4);
+      expect(mockProvider.getNetwork).toHaveBeenCalledTimes(1);
+      expect(mockProvider.getTransactionCount).toHaveBeenCalledWith(ADDRESSES.attacker);
+      expect(addrRecord.totalEthReceived).toStrictEqual(toBn(parseEther("48")));
+      expect(addrRecord.tokenSwapData.length).toStrictEqual(4);
     });
   });
 });
