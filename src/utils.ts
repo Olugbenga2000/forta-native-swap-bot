@@ -62,4 +62,4 @@ const deleteRedundantData = (timestamp: number) => {
   }
 };
 
-export { createOrUpdateData, toBn, deleteRedundantData, toCs};
+export { createOrUpdateData, toBn, deleteRedundantData, toCs };

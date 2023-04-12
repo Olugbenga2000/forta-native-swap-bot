@@ -1,8 +1,8 @@
 import { Finding, HandleTransaction, TransactionEvent, getEthersProvider, ethers, LogDescription } from "forta-agent";
-import { createOrUpdateData, toBn, toCs, deleteRedundantData} from "./utils";
+import { createOrUpdateData, toBn, toCs, deleteRedundantData } from "./utils";
 import { AddressRecord } from "./swap";
 import { createNewFinding } from "./finding";
-import { MINIMUM_SWAP_COUNT, ERC20_TRANSFER_EVENT, LOW_NONCE_THRESHOLD, WETH_WITHDRAWAL_EVENT} from "./constants";
+import { MINIMUM_SWAP_COUNT, ERC20_TRANSFER_EVENT, LOW_NONCE_THRESHOLD, WETH_WITHDRAWAL_EVENT } from "./constants";
 import NetworkManager from "./network";
 import BigNumber from "bignumber.js";
 
@@ -21,7 +21,7 @@ export const provideBotHandler = (
   provider: ethers.providers.JsonRpcProvider,
   lowTxCount: number,
   swapCountThreshold: number,
-  network: NetworkManager,
+  network: NetworkManager
 ): HandleTransaction => async (txEvent: TransactionEvent): Promise<Finding[]> => {
   const findings: Finding[] = [];
   const { from, hash, timestamp, blockNumber } = txEvent;
@@ -34,7 +34,7 @@ export const provideBotHandler = (
   }
   const msgSender = toCs(from);
   // filter the transaction logs for erc20 transfer events
-  const erc20TransferEvents = txEvent.filterLog(ERC20_TRANSFER_EVENT,);
+  const erc20TransferEvents = txEvent.filterLog(ERC20_TRANSFER_EVENT);
   // get events where token sender is msg.sender and no direct / indirect(liquidity removal)token burn
   const erc20TransferEventsFromMsgSender = erc20TransferEvents
     .filter(log => log.args.from === msgSender && log.args.to !== ethers.constants.AddressZero)
@@ -53,19 +53,19 @@ export const provideBotHandler = (
   if (!erc20TransferEventsFromMsgSender.length) return findings;
   // Check for withdrawals from the wrapped native token to determine if a native swap occurred
   let wethWithdrawals: LogDescription[], ethWithdrawn: BigNumber;
-  if(chainId === 42161 || chainId === 250){
-    wethWithdrawals = erc20TransferEvents.filter(log => log.address === network.wNative && log.args.to === ethers.constants.AddressZero)
+  if (chainId === 42161 || chainId === 250) {
+    wethWithdrawals = erc20TransferEvents.filter(
+      log => log.address === network.wNative && log.args.to === ethers.constants.AddressZero
+    );
     ethWithdrawn = wethWithdrawals.reduce((acc, log) => toBn(log.args.value).plus(acc), toBn(0));
-  }
-  else {
+  } else {
     wethWithdrawals = txEvent.filterLog(WETH_WITHDRAWAL_EVENT, network.wNative);
     ethWithdrawn = wethWithdrawals.reduce((acc, log) => toBn(log.args.wad).plus(acc), toBn(0));
   }
-  
+
   if (ethWithdrawn.eq(0)) return findings;
   totalNativeSwaps++;
 
-  
   // Check if msg.sender's address is new
   const nonce = await provider.getTransactionCount(msgSender);
   if (nonce > lowTxCount) return findings;
@@ -91,10 +91,5 @@ export const provideBotHandler = (
 
 export default {
   initialize: provideInitialize(getEthersProvider()),
-  handleTransaction: provideBotHandler(
-    getEthersProvider(),
-    LOW_NONCE_THRESHOLD,
-    MINIMUM_SWAP_COUNT,
-    networkManager
-  ),
+  handleTransaction: provideBotHandler(getEthersProvider(), LOW_NONCE_THRESHOLD, MINIMUM_SWAP_COUNT, networkManager),
 };

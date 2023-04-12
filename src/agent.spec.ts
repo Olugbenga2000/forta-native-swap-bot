@@ -3,7 +3,7 @@ import { createChecksumAddress } from "forta-agent-tools/lib/utils";
 import { TestTransactionEvent } from "forta-agent-tools/lib/test";
 import BigNumber from "bignumber.js";
 import { provideBotHandler, totalNativeSwaps, provideInitialize } from "./agent";
-import {toBn} from "./utils";
+import { toBn } from "./utils";
 import { createMetadata } from "./finding";
 import { UserSwapData, AddressRecord } from "./swap";
 import { ERC20_TRANSFER_EVENT as MOCK_ERC20_TRANSFER_EVENT, WETH_WITHDRAWAL_EVENT } from "./constants";
@@ -25,7 +25,7 @@ const ADDRESSES = {
   attacker: createChecksumAddress("0xb8652"),
   contractAddr: createChecksumAddress("0x3852A"),
   router1: createChecksumAddress("0x72A"),
-  router2: createChecksumAddress("0x0A4")
+  router2: createChecksumAddress("0x0A4"),
 };
 
 const mockCreateNewFinding = (sender: string, addrRecord: UserSwapData): Finding => {
@@ -52,13 +52,17 @@ const mockCreateNewFinding = (sender: string, addrRecord: UserSwapData): Finding
 };
 
 const MOCK_ERC20_IFACE = new ethers.utils.Interface([
-  MOCK_ERC20_TRANSFER_EVENT, 
-  MOCK_ERC20_APPROVAL_EVENT, 
-  WETH_WITHDRAWAL_EVENT
+  MOCK_ERC20_TRANSFER_EVENT,
+  MOCK_ERC20_APPROVAL_EVENT,
+  WETH_WITHDRAWAL_EVENT,
 ]);
 
-const createTransferEvent = (from: string, to: string, value: string, contractAddr = ADDRESSES.contractAddr): 
-[ethers.utils.EventFragment, string, any[]] => [
+const createTransferEvent = (
+  from: string,
+  to: string,
+  value: string,
+  contractAddr = ADDRESSES.contractAddr
+): [ethers.utils.EventFragment, string, any[]] => [
   MOCK_ERC20_IFACE.getEvent("Transfer"),
   contractAddr,
   [from, to, value],
@@ -67,13 +71,13 @@ const createTransferEvent = (from: string, to: string, value: string, contractAd
 const createWithdrawalEvent = (src: string, wad: ethers.BigNumber): [ethers.utils.EventFragment, string, any[]] => [
   MOCK_ERC20_IFACE.getEvent("Withdrawal"),
   MOCK_WETH_ADDRESS,
-  [src, wad]
-]
+  [src, wad],
+];
 
 describe("Unusual Native Swaps Bot Test Suite", () => {
   const mockProvider = {
     getTransactionCount: jest.fn(),
-    getNetwork: jest.fn()
+    getNetwork: jest.fn(),
   };
   const mockNetworkManager: NetworkManager = {
     minNativeThreshold: "30",
@@ -83,13 +87,13 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
     getLatestPriceFeed: jest.fn(),
   };
   let handleTransaction: HandleTransaction;
-  let initialize:() => Promise<void>;
+  let initialize: () => Promise<void>;
 
-  beforeEach(async() => {
+  beforeEach(async () => {
     mockProvider.getTransactionCount.mockReset();
     mockProvider.getNetwork.mockReset();
     AddressRecord.clear();
-    initialize = provideInitialize(mockProvider as unknown as ethers.providers.Provider);
+    initialize = provideInitialize((mockProvider as unknown) as ethers.providers.Provider);
     handleTransaction = provideBotHandler(
       (mockProvider as unknown) as ethers.providers.JsonRpcProvider,
       MOCK_LOW_TRANSACTION_COUNT_THRESHOLD,
@@ -298,25 +302,43 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .setTimestamp(19180075)
         .setHash("0x12347")
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
-        .addEventLog(...createTransferEvent(ADDRESSES.router1, ethers.constants.AddressZero, 
-          parseEther("15").toString(), MOCK_WETH_ADDRESS));
+        .addEventLog(
+          ...createTransferEvent(
+            ADDRESSES.router1,
+            ethers.constants.AddressZero,
+            parseEther("15").toString(),
+            MOCK_WETH_ADDRESS
+          )
+        );
 
       const txEvent2 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995450)
         .setTimestamp(19181800)
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"))
-        .addEventLog(...createTransferEvent(ADDRESSES.router2, ethers.constants.AddressZero, 
-          parseEther("20").toString(), MOCK_WETH_ADDRESS))
+        .addEventLog(
+          ...createTransferEvent(
+            ADDRESSES.router2,
+            ethers.constants.AddressZero,
+            parseEther("20").toString(),
+            MOCK_WETH_ADDRESS
+          )
+        );
 
       const txEvent3 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995490)
         .setTimestamp(19182700)
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"))
-        .addEventLog(...createTransferEvent(ADDRESSES.router1, ethers.constants.AddressZero, 
-          parseEther("5").toString(), MOCK_WETH_ADDRESS));
-      mockProvider.getNetwork.mockResolvedValueOnce({chainId: 1});  // Mainnet chain id
+        .addEventLog(
+          ...createTransferEvent(
+            ADDRESSES.router1,
+            ethers.constants.AddressZero,
+            parseEther("5").toString(),
+            MOCK_WETH_ADDRESS
+          )
+        );
+      mockProvider.getNetwork.mockResolvedValueOnce({ chainId: 1 }); // Mainnet chain id
       await initialize();
       expect(await handleTransaction(txEvent1)).toStrictEqual([]);
       expect(await handleTransaction(txEvent2)).toStrictEqual([]);
@@ -335,14 +357,12 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
         .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("20")));
 
-
       const txEvent2 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995450)
         .setTimestamp(19181800)
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"))
         .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("25")));
-
 
       const txEvent3 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
@@ -351,7 +371,7 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"))
         .addEventLog(...createWithdrawalEvent(ADDRESSES.router1, parseEther("10")));
 
-      mockProvider.getNetwork.mockResolvedValueOnce({chainId: 250});  // Fantom chain id
+      mockProvider.getNetwork.mockResolvedValueOnce({ chainId: 250 }); // Fantom chain id
       await initialize();
       expect(await handleTransaction(txEvent1)).toStrictEqual([]);
       expect(await handleTransaction(txEvent2)).toStrictEqual([]);
@@ -394,7 +414,7 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .mockResolvedValueOnce(101)
         .mockResolvedValueOnce(125)
         .mockResolvedValueOnce(148);
-      mockProvider.getNetwork.mockResolvedValueOnce({chainId: 1});  // Mainnet chain id
+      mockProvider.getNetwork.mockResolvedValueOnce({ chainId: 1 }); // Mainnet chain id
       await initialize();
 
       expect(await handleTransaction(txEvent1)).toStrictEqual([]);
@@ -523,39 +543,63 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .setTimestamp(19180075)
         .setHash("0x12347")
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
-        .addEventLog(...createTransferEvent(ADDRESSES.router1, ethers.constants.AddressZero, 
-          parseEther("15").toString(), MOCK_WETH_ADDRESS));
+        .addEventLog(
+          ...createTransferEvent(
+            ADDRESSES.router1,
+            ethers.constants.AddressZero,
+            parseEther("15").toString(),
+            MOCK_WETH_ADDRESS
+          )
+        );
 
       const txEvent2 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995450)
         .setTimestamp(19181800)
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"))
-        .addEventLog(...createTransferEvent(ADDRESSES.router2, ethers.constants.AddressZero, 
-          parseEther("20").toString(), MOCK_WETH_ADDRESS))
+        .addEventLog(
+          ...createTransferEvent(
+            ADDRESSES.router2,
+            ethers.constants.AddressZero,
+            parseEther("20").toString(),
+            MOCK_WETH_ADDRESS
+          )
+        );
 
       const txEvent3 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995490)
         .setTimestamp(19182700)
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"))
-        .addEventLog(...createTransferEvent(ADDRESSES.router1, ethers.constants.AddressZero, 
-          parseEther("5").toString(), MOCK_WETH_ADDRESS))
+        .addEventLog(
+          ...createTransferEvent(
+            ADDRESSES.router1,
+            ethers.constants.AddressZero,
+            parseEther("5").toString(),
+            MOCK_WETH_ADDRESS
+          )
+        );
 
       const txEvent4 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995590)
         .setTimestamp(19183100)
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "9878764"))
-        .addEventLog(...createTransferEvent(ADDRESSES.router2, ethers.constants.AddressZero, 
-          parseEther("8").toString(), MOCK_WETH_ADDRESS))
+        .addEventLog(
+          ...createTransferEvent(
+            ADDRESSES.router2,
+            ethers.constants.AddressZero,
+            parseEther("8").toString(),
+            MOCK_WETH_ADDRESS
+          )
+        );
       mockProvider.getTransactionCount
         .mockResolvedValueOnce(20)
         .mockResolvedValueOnce(45)
         .mockResolvedValueOnce(67)
         .mockResolvedValueOnce(120);
-      mockProvider.getNetwork.mockResolvedValueOnce({chainId: 42161})   // Arbitrum chain id
-      const initialize = provideInitialize(mockProvider as unknown as ethers.providers.Provider);
+      mockProvider.getNetwork.mockResolvedValueOnce({ chainId: 42161 }); // Arbitrum chain id
+      const initialize = provideInitialize((mockProvider as unknown) as ethers.providers.Provider);
       await initialize();
       expect(await handleTransaction(txEvent1)).toStrictEqual([]);
       expect(await handleTransaction(txEvent2)).toStrictEqual([]);
@@ -579,39 +623,63 @@ describe("Unusual Native Swaps Bot Test Suite", () => {
         .setTimestamp(19180075)
         .setHash("0x12347")
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "10000000"))
-        .addEventLog(...createTransferEvent(ADDRESSES.router1, ethers.constants.AddressZero, 
-          parseEther("15").toString(), MOCK_WETH_ADDRESS));
+        .addEventLog(
+          ...createTransferEvent(
+            ADDRESSES.router1,
+            ethers.constants.AddressZero,
+            parseEther("15").toString(),
+            MOCK_WETH_ADDRESS
+          )
+        );
 
       const txEvent2 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995450)
         .setTimestamp(19181800)
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "30000874"))
-        .addEventLog(...createTransferEvent(ADDRESSES.router2, ethers.constants.AddressZero, 
-          parseEther("20").toString(), MOCK_WETH_ADDRESS))
+        .addEventLog(
+          ...createTransferEvent(
+            ADDRESSES.router2,
+            ethers.constants.AddressZero,
+            parseEther("20").toString(),
+            MOCK_WETH_ADDRESS
+          )
+        );
 
       const txEvent3 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995490)
         .setTimestamp(19182700)
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "45008764"))
-        .addEventLog(...createTransferEvent(ADDRESSES.router1, ethers.constants.AddressZero, 
-          parseEther("5").toString(), MOCK_WETH_ADDRESS))
+        .addEventLog(
+          ...createTransferEvent(
+            ADDRESSES.router1,
+            ethers.constants.AddressZero,
+            parseEther("5").toString(),
+            MOCK_WETH_ADDRESS
+          )
+        );
 
       const txEvent4 = new TestTransactionEvent()
         .setFrom(lowerC(ADDRESSES.attacker))
         .setBlock(19995590)
         .setTimestamp(19183100)
         .addEventLog(...createTransferEvent(ADDRESSES.attacker, ADDRESSES.address2, "9878764"))
-        .addEventLog(...createTransferEvent(ADDRESSES.router2, ethers.constants.AddressZero, 
-          parseEther("8").toString(), MOCK_WETH_ADDRESS))
+        .addEventLog(
+          ...createTransferEvent(
+            ADDRESSES.router2,
+            ethers.constants.AddressZero,
+            parseEther("8").toString(),
+            MOCK_WETH_ADDRESS
+          )
+        );
       mockProvider.getTransactionCount
         .mockResolvedValueOnce(20)
         .mockResolvedValueOnce(45)
         .mockResolvedValueOnce(67)
         .mockResolvedValueOnce(120);
-      mockProvider.getNetwork.mockResolvedValueOnce({chainId: 250})   // Arbitrum chain id
-      const initialize = provideInitialize(mockProvider as unknown as ethers.providers.Provider);
+      mockProvider.getNetwork.mockResolvedValueOnce({ chainId: 250 }); // Arbitrum chain id
+      const initialize = provideInitialize((mockProvider as unknown) as ethers.providers.Provider);
       await initialize();
       expect(await handleTransaction(txEvent1)).toStrictEqual([]);
       expect(await handleTransaction(txEvent2)).toStrictEqual([]);
